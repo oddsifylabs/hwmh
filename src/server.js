@@ -587,6 +587,9 @@ app.listen(PORT, HOST, () => {
 ╚═══════════════════════════════════════════════════════╝
   `);
 
+  // Audit secrets at startup (masked)
+  secrets.auditLog();
+
   // Initialize Telegram alert bot
   telegramAlerts.init();
   telegramAlerts.alertSystemRestart(process.uptime());
