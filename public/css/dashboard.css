@@ -490,3 +490,61 @@ html, body {
   .worker-grid { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
+
+/* Footer */
+.app-footer {
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 14px 24px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.footer-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-brand { display: flex; align-items: center; gap: 8px; }
+.footer-logo { font-size: 14px; }
+.footer-meta { display: flex; align-items: center; gap: 8px; }
+.footer-meta a { color: var(--accent); text-decoration: none; }
+.footer-meta a:hover { text-decoration: underline; }
+
+/* Chat */
+.chat-list { display: flex; flex-direction: column; gap: 10px; }
+.chat-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.chat-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg-hover);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.chat-body { flex: 1; min-width: 0; }
+.chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.chat-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+.chat-time { font-size: 11px; color: var(--text-muted); }
+.chat-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.chat-result {
+  background: var(--bg-hover);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-result.error { border-left: 3px solid var(--danger); background: rgba(239,68,68,0.08); }
+.chat-result.success { border-left: 3px solid var(--success); background: rgba(34,197,94,0.08); }

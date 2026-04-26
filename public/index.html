@@ -44,6 +44,10 @@
         <span class="nav-icon">&#9888;&#65039;</span> Errors
         <span class="nav-badge badge-danger" id="badge-errors-nav">0</span>
       </a>
+      <a class="nav-item" data-tab="chat" href="#" onclick="switchTab('chat');return false">
+        <span class="nav-icon">&#128172;</span> Chat
+        <span class="nav-badge badge-info" id="badge-chat-nav">0</span>
+      </a>
 
       <div class="nav-section">System</div>
       <a class="nav-item" data-tab="system" href="#" onclick="switchTab('system');return false">
@@ -182,6 +186,13 @@
         </div>
       </div>
 
+      <!-- ============ CHAT TAB ============ -->
+      <div id="tab-chat" class="tab-panel">
+        <div class="header"><h2>&#128172; Worker Chat</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadChat()">&#128260; Refresh</button></div></div>
+        <div class="info-banner">Live feed of worker task outputs and completions.</div>
+        <div class="chat-list" id="chat-list"></div>
+      </div>
+
       <!-- ============ SYSTEM TAB ============ -->
       <div id="tab-system" class="tab-panel">
         <div class="header"><h2>&#9881;&#65039; System</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadSystem()">&#128260; Refresh</button></div></div>
@@ -200,6 +211,26 @@
   </div>
 
   <div class="toast-container" id="toasts"></div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="footer-logo">&#9889;</span>
+        <strong>HWMH</strong> — Hermes Workers Management Hub
+      </div>
+      <div class="footer-meta">
+        <span>v1.0.1</span>
+        <span>&middot;</span>
+        <span>Oddsify Labs</span>
+        <span>&middot;</span>
+        <a href="https://github.com/oddsifylabs/hwmh" target="_blank" rel="noopener">Open Source</a>
+        <span>&middot;</span>
+        <span>MIT License</span>
+      </div>
+    </div>
+  </footer>
+
   <script src="/js/dashboard.js"></script>
 </body>
 </html>

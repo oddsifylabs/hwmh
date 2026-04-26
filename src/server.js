@@ -381,6 +381,22 @@ app.post('/complete/:workerId', (req, res) => {
   // Notify Sophia
   sophia.handleCompletion(workerId, { taskId, success, result, error });
 
+  // Save to history for chat feed
+  const historyEntry = {
+    id: taskId,
+    workerId,
+    description: task.description,
+    status: task.status,
+    result: result || null,
+    error: error || null,
+    timestamp: task.completedAt,
+    startedAt: task.startedAt || null,
+    parentTaskId: task.parentTaskId || null
+  };
+  if (!global.taskHistory) global.taskHistory = [];
+  global.taskHistory.unshift(historyEntry);
+  if (global.taskHistory.length > 500) global.taskHistory.pop();
+
   // Telegram alerts
   if (!success) {
     telegramAlerts.alertTaskFailed(workerId, WORKERS[workerId]?.name || workerId, taskId, error);
@@ -507,6 +523,12 @@ app.get('/api/config', (req, res) => {
     dataDir: DATA_DIR,
     stateFile: STATE_FILE
   });
+});
+
+// Task history (chat feed)
+app.get('/api/history', (req, res) => {
+  const history = global.taskHistory || [];
+  res.json({ history: history.slice(0, 100) });
 });
 
 // Clear worker queue

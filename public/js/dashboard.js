@@ -23,6 +23,7 @@ function switchTab(tab) {
   if (tab === 'reasoning') loadReasoning();
   if (tab === 'decisions') loadDecisions();
   if (tab === 'errors') loadErrors();
+  if (tab === 'chat') loadChat();
   if (tab === 'system') loadSystem();
   if (tab === 'config') loadConfig();
   if (tab === 'tasks') renderTasksFiltered();
@@ -346,6 +347,50 @@ async function loadConfig() {
     block.textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     block.textContent = 'Failed to load configuration.';
+  }
+}
+
+// ===================== CHAT =====================
+async function loadChat() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  list.innerHTML = '<div class="info-banner">Loading worker outputs...</div>';
+
+  try {
+    const data = await fetch('/api/history').then(r => r.json());
+    const history = data.history || [];
+    const badge = document.getElementById('badge-chat-nav');
+    if (badge) badge.textContent = history.length;
+
+    if (!history.length) {
+      list.innerHTML = '<div class="info-banner">No worker output yet. Send a command and watch it appear here.</div>';
+      return;
+    }
+
+    list.innerHTML = history.map(item => {
+      const emoji = WORKER_EMOJIS[item.workerId] || '🤖';
+      const name = WORKER_NAMES[item.workerId] || item.workerId;
+      const statusClass = item.status === 'failed' ? 'error' : 'success';
+      const resultText = item.error
+        ? `Error: ${escapeHtml(item.error)}`
+        : escapeHtml(JSON.stringify(item.result, null, 2));
+
+      return `
+        <div class="chat-item">
+          <div class="chat-avatar">${emoji}</div>
+          <div class="chat-body">
+            <div class="chat-header">
+              <span class="chat-name">${name}</span>
+              <span class="chat-time">${timeAgo(item.timestamp)}</span>
+            </div>
+            <div class="chat-desc">${escapeHtml(item.description)}</div>
+            <div class="chat-result ${statusClass}">${resultText}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = '<div class="info-banner" style="color:var(--danger);border-color:var(--danger)">Failed to load chat</div>';
   }
 }
 
