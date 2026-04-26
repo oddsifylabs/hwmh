@@ -1,0 +1,15 @@
+[Unit]
+Description=HAMH Iris Hermes Worker
+After=network.target
+
+[Service]
+Type=simple
+User=hamh
+WorkingDirectory=/opt/hamh/workers/iris
+ExecStart=/usr/bin/node iris-worker.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
