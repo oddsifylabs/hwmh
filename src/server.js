@@ -441,6 +441,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'hwmh', version: '1.0.1', timestamp: new Date().toISOString() });
 });
 
+// Update Sophia's heartbeat since she runs inside the server
+setInterval(() => {
+  workerStatus.sophia.lastSeen = new Date().toISOString();
+  workerStatus.sophia.status = 'idle';
+}, 10000);
+
 // ============================================
 // DASHBOARD CONTROL API
 // ============================================
@@ -473,6 +479,19 @@ app.get('/api/decisions', (req, res) => {
     .slice(-100)
     .reverse();
   res.json({ decisions });
+});
+
+// Error log
+app.get('/api/errors', (req, res) => {
+  const logs = [];
+  if (sophia.taskHistory && sophia.taskHistory.length) {
+    logs.push(...sophia.taskHistory.filter(e => e.level === 'error' || e.level === 'warn'));
+  }
+  if (sophia.gottfried && sophia.gottfried.reasoningLog) {
+    logs.push(...sophia.gottfried.reasoningLog.filter(e => e.level === 'error' || e.level === 'warn'));
+  }
+  logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json({ errors: logs.slice(0, 100) });
 });
 
 // Current configuration

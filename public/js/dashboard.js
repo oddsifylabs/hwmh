@@ -271,7 +271,8 @@ async function loadErrors() {
   try {
     const data = await fetch('/api/errors').then(r => r.json());
     const errors = data.errors || [];
-    document.getElementById('badge-errors-nav').textContent = errors.length;
+    const badge = document.getElementById('badge-errors-nav');
+    if (badge) badge.textContent = errors.length;
 
     if (!errors.length) {
       tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No errors logged — all systems healthy</td></tr>`;
