@@ -46,7 +46,7 @@ async function refreshAll() {
 }
 
 function renderMetrics(status, workers, tasksData) {
-  const workerIds = Object.keys(workers.workers || {});
+  const workerIds = Object.keys(workers.workers || {}).filter(k => !k.startsWith('$') && !k.startsWith('_'));
   const online = workerIds.filter(id => {
     const s = (workers.status || {})[id];
     return s && s.lastSeen;
@@ -81,7 +81,9 @@ function renderWorkers(data) {
   const status = data.status || {};
   const queues = data.queues || {};
 
-  grid.innerHTML = Object.entries(workers).map(([id, w]) => {
+  const workerIds = Object.keys(workers).filter(k => !k.startsWith('$') && !k.startsWith('_'));
+
+  grid.innerHTML = workerIds.map(id => {
     const s = status[id] || { status: 'offline', lastSeen: null, queueLength: 0 };
     const stateClass = s.status === 'working' ? 'busy' : s.status === 'polling' ? 'online' : s.lastSeen ? 'idle' : 'offline';
     const stateLabel = s.status === 'working' ? 'Working' : s.status === 'polling' ? 'Online' : s.lastSeen ? 'Idle' : 'Offline';

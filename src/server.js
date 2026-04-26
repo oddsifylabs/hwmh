@@ -131,7 +131,11 @@ const DEFAULT_WORKERS = {
   }
 };
 
-const WORKERS = loadWorkersConfig() || DEFAULT_WORKERS;
+const WORKERS_RAW = loadWorkersConfig() || DEFAULT_WORKERS;
+// Filter out metadata keys like $schema, _comment
+const WORKERS = Object.fromEntries(
+  Object.entries(WORKERS_RAW).filter(([k]) => !k.startsWith('$') && !k.startsWith('_'))
+);
 
 // ============================================
 // SOPHIA INSTANCE
