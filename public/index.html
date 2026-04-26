@@ -5,125 +5,196 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWMH — Hermes Workers Management Hub</title>
   <link rel="stylesheet" href="/css/dashboard.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⚡%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" href="/favicon.png">
 </head>
 <body>
   <div class="app">
     <!-- Sidebar -->
     <nav class="sidebar">
       <div class="sidebar-brand">
-        <div class="logo-icon">⚡</div>
+        <div class="logo-icon">&#9889;</div>
         <div>
           <h1>HWMH</h1>
           <span>Command Center</span>
         </div>
       </div>
-      <a class="nav-item active" href="#" onclick="return false">
-        <span class="dot online"></span> Dashboard
+
+      <div class="nav-section">Overview</div>
+      <a class="nav-item active" data-tab="dashboard" href="#" onclick="switchTab('dashboard');return false">
+        <span class="nav-icon">&#127968;</span> Dashboard
       </a>
-      <a class="nav-item" href="#" onclick="return false">
-        <span class="dot online" id="nav-sophia"></span> Sophia
+      <a class="nav-item" data-tab="workers" href="#" onclick="switchTab('workers');return false">
+        <span class="nav-icon">&#128104;&#8205;&#128187;</span> Workers
+        <span class="nav-badge" id="badge-workers-nav">4</span>
       </a>
-      <a class="nav-item" href="#" onclick="return false">
-        <span class="dot" id="nav-iris"></span> Iris
+      <a class="nav-item" data-tab="tasks" href="#" onclick="switchTab('tasks');return false">
+        <span class="nav-icon">&#128203;</span> Tasks
+        <span class="nav-badge" id="badge-tasks-nav">0</span>
       </a>
-      <a class="nav-item" href="#" onclick="return false">
-        <span class="dot" id="nav-pheme"></span> Pheme
+
+      <div class="nav-section">Intelligence</div>
+      <a class="nav-item" data-tab="reasoning" href="#" onclick="switchTab('reasoning');return false">
+        <span class="nav-icon">&#129504;</span> Reasoning
       </a>
-      <a class="nav-item" href="#" onclick="return false">
-        <span class="dot" id="nav-kairos"></span> Kairos
+      <a class="nav-item" data-tab="decisions" href="#" onclick="switchTab('decisions');return false">
+        <span class="nav-icon">&#9989;</span> Decisions
+      </a>
+      <a class="nav-item" data-tab="errors" href="#" onclick="switchTab('errors');return false">
+        <span class="nav-icon">&#9888;&#65039;</span> Errors
+        <span class="nav-badge badge-danger" id="badge-errors-nav">0</span>
+      </a>
+
+      <div class="nav-section">System</div>
+      <a class="nav-item" data-tab="system" href="#" onclick="switchTab('system');return false">
+        <span class="nav-icon">&#9881;&#65039;</span> System
+      </a>
+      <a class="nav-item" data-tab="config" href="#" onclick="switchTab('config');return false">
+        <span class="nav-icon">&#128295;</span> Config
       </a>
     </nav>
 
     <!-- Main -->
     <main class="main">
-      <div class="header">
-        <h2>Dashboard</h2>
-        <div class="header-status">
-          <span class="pulse"></span>
-          <span id="system-status">Operational</span>
+      <!-- ============ DASHBOARD TAB ============ -->
+      <div id="tab-dashboard" class="tab-panel active">
+        <div class="header">
+          <h2>Dashboard</h2>
+          <div class="header-actions">
+            <button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">&#128260; Refresh</button>
+            <div class="header-status">
+              <span class="pulse" id="pulse-dot"></span>
+              <span id="system-status">Operational</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-4">
+          <div class="card metric-card">
+            <div class="card-header"><span class="card-title">Workers Online</span><span class="card-badge badge-success" id="badge-workers">4/4</span></div>
+            <div class="card-value" id="metric-workers">4</div>
+            <div class="card-sub">All agents reporting</div>
+          </div>
+          <div class="card metric-card">
+            <div class="card-header"><span class="card-title">Active Tasks</span><span class="card-badge badge-info" id="badge-active">0</span></div>
+            <div class="card-value" id="metric-active">0</div>
+            <div class="card-sub">Currently in progress</div>
+          </div>
+          <div class="card metric-card">
+            <div class="card-header"><span class="card-title">Queue Depth</span><span class="card-badge badge-warning" id="badge-queue">0</span></div>
+            <div class="card-value" id="metric-queue">0</div>
+            <div class="card-sub">Tasks waiting</div>
+          </div>
+          <div class="card metric-card">
+            <div class="card-header"><span class="card-title">Completed Today</span><span class="card-badge badge-success" id="badge-completed">0</span></div>
+            <div class="card-value" id="metric-completed">0</div>
+            <div class="card-sub">Successfully finished</div>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="command-panel card">
+            <h3>&#9997;&#65039; Send Command</h3>
+            <div class="command-input-wrap">
+              <input type="text" id="command-input" placeholder="@sophia Research competitors for Oddsify Labs..." onkeydown="if(event.key==='Enter')sendCommand()">
+              <button id="cmd-btn" class="btn btn-primary" onclick="sendCommand()">Send</button>
+            </div>
+            <div class="command-hint">
+              <strong>@sophia</strong> = Manager &nbsp;|&nbsp; <strong>@iris</strong> = Admin &nbsp;|&nbsp; <strong>@pheme</strong> = Social &nbsp;|&nbsp; <strong>@kairos</strong> = Sales
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>&#128736;&#65039; Quick Actions</h3>
+            <div class="quick-actions">
+              <button class="btn btn-secondary" onclick="clearAllQueues()">&#128465;&#65039; Clear All Queues</button>
+              <button class="btn btn-secondary" onclick="refreshAll(true)">&#128260; Force Refresh</button>
+              <button class="btn btn-secondary" onclick="switchTab('system')">&#128202; View System</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-title">&#128104;&#8205;&#128187; Worker Status</h3>
+        <div class="worker-grid" id="worker-grid"></div>
+
+        <h3 class="section-title">&#128308; Live Activity</h3>
+        <div class="table-wrap">
+          <div class="activity-list" id="activity-list"></div>
         </div>
       </div>
 
-      <!-- Metrics -->
-      <div class="grid">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Workers Online</span>
-            <span class="card-badge badge-success" id="badge-workers">4/4</span>
+      <!-- ============ WORKERS TAB ============ -->
+      <div id="tab-workers" class="tab-panel">
+        <div class="header"><h2>Workers</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">&#128260; Refresh</button></div></div>
+        <div class="worker-grid" id="worker-grid-detail"></div>
+      </div>
+
+      <!-- ============ TASKS TAB ============ -->
+      <div id="tab-tasks" class="tab-panel">
+        <div class="header">
+          <h2>Task History</h2>
+          <div class="header-actions">
+            <select id="task-filter-worker" onchange="renderTasksFiltered()" class="filter-select">
+              <option value="">All Workers</option>
+              <option value="sophia">Sophia</option>
+              <option value="iris">Iris</option>
+              <option value="pheme">Pheme</option>
+              <option value="kairos">Kairos</option>
+            </select>
+            <select id="task-filter-status" onchange="renderTasksFiltered()" class="filter-select">
+              <option value="">All Status</option>
+              <option value="queued">Queued</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
           </div>
-          <div class="card-value" id="metric-workers">4</div>
-          <div class="card-sub">All agents reporting</div>
         </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Active Tasks</span>
-            <span class="card-badge badge-info" id="badge-active">0</span>
-          </div>
-          <div class="card-value" id="metric-active">0</div>
-          <div class="card-sub">Currently in progress</div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Queue Depth</span>
-            <span class="card-badge badge-warning" id="badge-queue">0</span>
-          </div>
-          <div class="card-value" id="metric-queue">0</div>
-          <div class="card-sub">Tasks waiting</div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Completed Today</span>
-            <span class="card-badge badge-success" id="badge-completed">0</span>
-          </div>
-          <div class="card-value" id="metric-completed">0</div>
-          <div class="card-sub">Successfully finished</div>
+        <div class="table-wrap">
+          <table class="data-table" id="tasks-table-full">
+            <thead><tr><th>ID</th><th>Worker</th><th>Status</th><th>Description</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody id="task-table-full-body"></tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Command Panel -->
-      <div class="command-panel">
-        <h3>Send Command</h3>
-        <div class="command-input-wrap">
-          <input type="text" id="command-input" placeholder="@sophia Research competitors for Oddsify Labs..." onkeydown="if(event.key==='Enter')sendCommand()">
-          <button id="cmd-btn" onclick="sendCommand()">Send</button>
-        </div>
-        <div class="command-hint">
-          Use <strong>@sophia</strong> for manager, <strong>@iris</strong>, <strong>@pheme</strong>, <strong>@kairos</strong> for workers
+      <!-- ============ REASONING TAB ============ -->
+      <div id="tab-reasoning" class="tab-panel">
+        <div class="header"><h2>&#129504; Gottfried Reasoning</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadReasoning()">&#128260; Refresh</button></div></div>
+        <div class="info-banner">Gottfried is the brain. Every decision he makes is logged here.</div>
+        <div class="log-list" id="reasoning-list"></div>
+      </div>
+
+      <!-- ============ DECISIONS TAB ============ -->
+      <div id="tab-decisions" class="tab-panel">
+        <div class="header"><h2>&#9989; Sophia Decisions</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadDecisions()">&#128260; Refresh</button></div></div>
+        <div class="info-banner">Sophia's delegation and command processing history.</div>
+        <div class="log-list" id="decisions-list"></div>
+      </div>
+
+      <!-- ============ ERRORS TAB ============ -->
+      <div id="tab-errors" class="tab-panel">
+        <div class="header"><h2>&#9888;&#65039; Error Log</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadErrors()">&#128260; Refresh</button></div></div>
+        <div class="table-wrap">
+          <table class="data-table"><thead><tr><th>Time</th><th>Agent</th><th>Level</th><th>Message</th></tr></thead>
+          <tbody id="errors-table-body"></tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Workers -->
-      <h3 style="margin-bottom:14px;font-size:15px;font-weight:600;">Worker Status</h3>
-      <div class="worker-grid" id="worker-grid"></div>
-
-      <!-- Tasks Table -->
-      <div class="table-wrap">
-        <div class="table-header">
-          <h3>Task Queue</h3>
-          <span class="count" id="task-count">0 tasks</span>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Worker</th>
-              <th>Status</th>
-              <th>Description</th>
-              <th>Started</th>
-            </tr>
-          </thead>
-          <tbody id="task-table"></tbody>
-        </table>
+      <!-- ============ SYSTEM TAB ============ -->
+      <div id="tab-system" class="tab-panel">
+        <div class="header"><h2>&#9881;&#65039; System</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadSystem()">&#128260; Refresh</button></div></div>
+        <div class="grid grid-2" id="system-grid"></div>
+        <h3 class="section-title">&#128202; Memory Usage</h3>
+        <div class="card" id="memory-card"></div>
       </div>
 
-      <!-- Activity Feed -->
-      <div class="table-wrap">
-        <div class="table-header">
-          <h3>Recent Activity</h3>
-          <span class="count" id="activity-count">0 events</span>
-        </div>
-        <div class="activity-list" id="activity-list"></div>
+      <!-- ============ CONFIG TAB ============ -->
+      <div id="tab-config" class="tab-panel">
+        <div class="header"><h2>&#128295; Configuration</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadConfig()">&#128260; Refresh</button></div></div>
+        <div class="info-banner">Current active worker configuration loaded from <code>config/workers.json</code></div>
+        <pre class="code-block" id="config-block"></pre>
       </div>
     </main>
   </div>

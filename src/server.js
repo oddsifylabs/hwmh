@@ -429,6 +429,86 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
+// DASHBOARD CONTROL API
+// ============================================
+
+// System information
+app.get('/api/system', (req, res) => {
+  res.json({
+    version: '1.0.0',
+    nodeVersion: process.version,
+    platform: process.platform,
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    env: process.env.NODE_ENV || 'development',
+    port: PORT,
+    workersConfigured: Object.keys(WORKERS),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Gottfried reasoning log
+app.get('/api/reasoning', (req, res) => {
+  const log = sophia.gottfried ? sophia.gottfried.reasoningLog.slice(-100).reverse() : [];
+  res.json({ reasoning: log });
+});
+
+// Sophia decision history
+app.get('/api/decisions', (req, res) => {
+  const decisions = (sophia.taskHistory || [])
+    .filter(e => e.level === 'info' && e.message && (e.message.includes('delegat') || e.message.includes('Received command') || e.message.includes('processed')))
+    .slice(-100)
+    .reverse();
+  res.json({ decisions });
+});
+
+// Current configuration
+app.get('/api/config', (req, res) => {
+  res.json({
+    workers: WORKERS,
+    directorName: sophia.directorName,
+    gottfriedVerbose: sophia.gottfried.verbose || false,
+    maxHistory: sophia.maxHistory,
+    dataDir: DATA_DIR,
+    stateFile: STATE_FILE
+  });
+});
+
+// Clear worker queue
+app.post('/api/workers/:workerId/clear', requireAuth, (req, res) => {
+  const { workerId } = req.params;
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+  const cleared = queues[workerId].length;
+  queues[workerId] = [];
+  workerStatus[workerId].queueLength = 0;
+  workerStatus[workerId].status = 'idle';
+  delete workerStatus[workerId].currentTask;
+  persistState();
+  res.json({ success: true, workerId, cleared, message: `Cleared ${cleared} tasks from ${workerId}` });
+});
+
+// Reset worker status
+app.post('/api/workers/:workerId/reset', requireAuth, (req, res) => {
+  const { workerId } = req.params;
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+  workerStatus[workerId] = { status: 'idle', lastSeen: null, queueLength: queues[workerId].length };
+  res.json({ success: true, workerId, message: `Reset ${workerId} status` });
+});
+
+// Recent errors
+app.get('/api/errors', (req, res) => {
+  const errors = [];
+  if (sophia.taskHistory) {
+    errors.push(...sophia.taskHistory.filter(e => e.level === 'error').slice(-50));
+  }
+  if (sophia.gottfried && sophia.gottfried.reasoningLog) {
+    errors.push(...sophia.gottfried.reasoningLog.filter(e => e.level === 'error').slice(-50).map(e => ({...e, agent: 'Gottfried'})));
+  }
+  errors.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json({ errors: errors.slice(0, 50) });
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
