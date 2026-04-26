@@ -10,14 +10,15 @@
 
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
+const secrets = require('../lib/secrets');
 
 // ============================================
 // CONFIG
 // ============================================
 
-const BOT_TOKEN = process.env.TELEGRAM_ALERT_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_ALERT_CHAT_ID;
-const HWMH_BASE_URL = process.env.HWMH_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+const BOT_TOKEN = secrets.getSecret('TELEGRAM_ALERT_BOT_TOKEN');
+const CHAT_ID = secrets.getSecret('TELEGRAM_ALERT_CHAT_ID');
+const HWMH_BASE_URL = secrets.getSecret('HWMH_BASE_URL') || `http://localhost:${secrets.getSecret('PORT') || 3000}`;
 const ALERT_ENABLED = BOT_TOKEN && CHAT_ID;
 
 // Throttling / dedup

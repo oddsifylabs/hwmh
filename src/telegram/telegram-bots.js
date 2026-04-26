@@ -11,6 +11,7 @@
 
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
+const secrets = require('../lib/secrets');
 
 // ============================================
 // CONFIG
@@ -18,35 +19,35 @@ const axios = require('axios');
 
 const BOT_CONFIG = {
   gottfried: {
-    token: process.env.GOTTFRIED_BOT_TOKEN,
+    token: secrets.getSecret('GOTTFRIED_BOT_TOKEN'),
     name: 'Gottfried',
     role: 'AI Brain',
     description: 'Direct reasoning engine. Ask me anything.',
     color: '\x1b[36m' // cyan
   },
   sophia: {
-    token: process.env.SOPHIA_BOT_TOKEN,
+    token: secrets.getSecret('SOPHIA_BOT_TOKEN'),
     name: 'Sophia',
     role: 'Manager',
     description: 'I delegate tasks to workers. Use @iris, @pheme, @kairos.',
     color: '\x1b[35m' // magenta
   },
   iris: {
-    token: process.env.IRIS_BOT_TOKEN,
+    token: secrets.getSecret('IRIS_BOT_TOKEN'),
     name: 'Iris',
     role: 'Admin Assistant',
     description: 'Scheduling, research, documentation, email, reminders.',
     color: '\x1b[32m' // green
   },
   pheme: {
-    token: process.env.PHEME_BOT_TOKEN,
+    token: secrets.getSecret('PHEME_BOT_TOKEN'),
     name: 'Pheme',
     role: 'Social Media Manager',
     description: 'Posts, engagement, analytics, content strategy.',
     color: '\x1b[33m' // yellow
   },
   kairos: {
-    token: process.env.KAIROS_BOT_TOKEN,
+    token: secrets.getSecret('KAIROS_BOT_TOKEN'),
     name: 'Kairos',
     role: 'Sales & Marketing',
     description: 'Lead generation, sales, marketing, CRM.',
@@ -54,8 +55,8 @@ const BOT_CONFIG = {
   }
 };
 
-const HWMH_BASE_URL = process.env.HWMH_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-const API_KEY = process.env.API_KEY;
+const HWMH_BASE_URL = secrets.getSecret('HWMH_BASE_URL') || `http://localhost:${secrets.getSecret('PORT') || 3000}`;
+const API_KEY = secrets.getSecret('API_KEY');
 
 // ============================================
 // LOGGING

@@ -11,6 +11,7 @@
  */
 
 const axios = require('axios');
+const secrets = require('./secrets');
 
 const TOKEN_PLACEHOLDER = '[REDACTED]';
 const GITHUB_API_BASE = 'https://api.github.com';
@@ -40,7 +41,7 @@ function sanitizeError(err, token) {
 
 class SecureGitHubClient {
   constructor() {
-    this.token = process.env.GITHUB_TOKEN;
+    this.token = secrets.getSecretOrThrow('GITHUB_TOKEN');
     if (!this.token || !this.token.startsWith('ghp_')) {
       throw new Error(
         'GITHUB_TOKEN is missing or malformed. ' +

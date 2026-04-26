@@ -56,7 +56,8 @@ function saveState(state) {
 // ============================================
 // AUTHENTICATION
 // ============================================
-const API_KEY = process.env.API_KEY;
+const secrets = require('./lib/secrets');
+const API_KEY = secrets.getSecret('API_KEY');
 
 function requireAuth(req, res, next) {
   if (!API_KEY) return next(); // Dev mode
@@ -72,7 +73,7 @@ function requireAuth(req, res, next) {
 // ============================================
 
 function loadWorkersConfig() {
-  const configPath = process.env.WORKERS_CONFIG_PATH || path.join(__dirname, '..', 'config', 'workers.json');
+  const configPath = secrets.getSecret('WORKERS_CONFIG_PATH') || path.join(__dirname, '..', 'config', 'workers.json');
   if (fs.existsSync(configPath)) {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -145,8 +146,8 @@ const WORKERS = Object.fromEntries(
 const pendingNotifications = new Map(); // taskId -> { chatId, source, user }
 
 const sophia = new Sophia({
-  directorName: process.env.DIRECTOR_NAME || 'Director',
-  gottfried: { verbose: process.env.GOTTFRIED_VERBOSE === 'true' },
+  directorName: secrets.getSecret('DIRECTOR_NAME') || 'Director',
+  gottfried: { verbose: secrets.getSecret('GOTTFRIED_VERBOSE') === 'true' },
   onDelegate: (assignments) => {
     // Push tasks to actual worker queues
     for (const assignment of assignments) {
@@ -478,7 +479,7 @@ app.get('/api/system', (req, res) => {
     platform: process.platform,
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    env: process.env.NODE_ENV || 'development',
+    env: secrets.getSecret('NODE_ENV') || 'development',
     port: PORT,
     workersConfigured: Object.keys(WORKERS),
     timestamp: new Date().toISOString()
@@ -569,8 +570,8 @@ app.get('/api/errors', (req, res) => {
 // START SERVER
 // ============================================
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = secrets.getSecret('PORT') || 3000;
+const HOST = secrets.getSecret('HOST') || '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
   console.log(`
