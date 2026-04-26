@@ -1,0 +1,44 @@
+{
+  "$schema": "./workers.schema.json",
+  "_comment": "HWMH Default Worker Roster: Sophia (Manager) + Iris + Pheme + Kairos",
+  "sophia": {
+    "name": "Sophia Hermes",
+    "type": "director-facing",
+    "transport": "internal",
+    "role": "orchestrator",
+    "capabilities": ["task-orchestration", "flow-control", "agent-delegation", "status-synthesis", "director-reports", "writing", "research", "admin"],
+    "description": "The Manager. The only agent that speaks with the Director. Controls task flow between all agents.",
+    "isManager": true,
+    "riskTier": 2
+  },
+  "iris": {
+    "name": "Iris Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["admin", "schedule", "research", "documentation", "email", "reminder"],
+    "role": "admin-assistant",
+    "description": "Admin Assistant. Schedules, organizes, researches, and documents.",
+    "reportsTo": "sophia",
+    "riskTier": 1
+  },
+  "pheme": {
+    "name": "Pheme Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["post-x", "engagement", "analytics", "schedule", "content-strategy", "curate-content"],
+    "role": "social-media-manager",
+    "description": "Social Media Manager. Creates content, manages engagement, tracks analytics.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  },
+  "kairos": {
+    "name": "Kairos Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["lead-generation", "sales", "marketing", "crm", "analytics", "content-strategy"],
+    "role": "sales-marketing",
+    "description": "Sales & Marketing. Generates leads, manages outreach, tracks pipeline.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  }
+}
