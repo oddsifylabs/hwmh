@@ -1,548 +1,480 @@
-/**
- * HWMH Dashboard Controller
- * Full-featured command center with tabs, controls, and real-time data.
- */
+/* ============================================================
+   HWMH Dashboard JS
+   Hermes Workers Management Hub — Oddsify Labs
+   ============================================================ */
 
-const WORKER_EMOJIS = { sophia: '👤', iris: '📚', pheme: '📢', kairos: '📊' };
-const WORKER_NAMES = { sophia: 'Sophia Hermes', iris: 'Iris Hermes', pheme: 'Pheme Hermes', kairos: 'Kairos Hermes' };
+const API = {
+  status:    '/status',
+  workers:   '/workers',
+  tasks:     '/api/tasks',
+  command:   '/command',
+  reasoning: '/api/reasoning',
+  decisions: '/api/decisions',
+  errors:    '/api/errors',
+  history:   '/api/history',
+  system:    '/api/system',
+  config:    '/api/config',
+  clear:     (id) => `/api/workers/${id}/clear`,
+  reset:     (id) => `/api/workers/${id}/reset`,
+};
 
-let allTasksCache = [];
-let allWorkersCache = {};
 let currentTab = 'dashboard';
-let completedCount = 0;
-let errorCount = 0;
+let chatMessages = [];
+let chatUnread = 0;
+let chatPollInterval = null;
 
-// ===================== TABS =====================
+/* ---------- Tabs ---------- */
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + tab)?.classList.add('active');
-  document.querySelector(`.nav-item[data-tab="${tab}"]`)?.classList.add('active');
 
+  const panel = document.getElementById('tab-' + tab);
+  if (panel) panel.classList.add('active');
+
+  const nav = document.querySelector(`.nav-item[data-tab="${tab}"]`);
+  if (nav) nav.classList.add('active');
+
+  if (tab === 'chat') {
+    chatUnread = 0;
+    updateChatBadge();
+  }
+
+  // Auto-load tab content
+  if (tab === 'workers') loadWorkersDetail();
+  if (tab === 'tasks')   loadTasks();
+  if (tab === 'chat')    loadChat();
   if (tab === 'reasoning') loadReasoning();
   if (tab === 'decisions') loadDecisions();
-  if (tab === 'errors') loadErrors();
-  if (tab === 'chat') loadChat();
-  if (tab === 'system') loadSystem();
-  if (tab === 'config') loadConfig();
-  if (tab === 'tasks') renderTasksFiltered();
-  if (tab === 'workers') renderWorkersDetail();
+  if (tab === 'errors')  loadErrors();
+  if (tab === 'system')  loadSystem();
+  if (tab === 'config')  loadConfig();
 }
 
-// ===================== REFRESH =====================
+/* ---------- Fetch helpers ---------- */
+async function get(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function post(url, body = {}) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+/* ---------- Dashboard ---------- */
 async function refreshAll(force = false) {
   try {
-    const [status, workers, tasks, logs] = await Promise.all([
-      fetch('/status').then(r => r.json()),
-      fetch('/workers').then(r => r.json()),
-      fetch('/api/tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
-      fetch('/api/logs').then(r => r.json()).catch(() => ({ logs: [] }))
-    ]);
-
-    allTasksCache = tasks.tasks || [];
-    allWorkersCache = workers;
-
-    if (currentTab === 'dashboard') {
-      renderMetrics(status, workers, tasks);
-      renderWorkers(workers);
-      renderActivity(logs);
-    }
-    if (currentTab === 'workers') renderWorkersDetail();
-    if (currentTab === 'tasks') renderTasksFiltered();
-
-    updateSidebar(workers);
-    updateNavBadges(workers, tasks);
+    const data = await get(API.workers);
+    renderWorkers(data.workers, data.status, data.queues);
+    renderMetrics(data.status, data.queues);
+    if (currentTab === 'tasks') loadTasks();
+    if (currentTab === 'system') loadSystem();
   } catch (err) {
     console.error('Refresh failed:', err);
-    if (force) showToast('Connection Error', 'Unable to reach HWMH server', 'error');
+    toast('Refresh failed: ' + err.message, 'error');
   }
 }
 
-function updateNavBadges(workers, tasks) {
-  const workerIds = Object.keys(workers.workers || {}).filter(k => !k.startsWith('$') && !k.startsWith('_'));
-  document.getElementById('badge-workers-nav').textContent = workerIds.length;
-  document.getElementById('badge-tasks-nav').textContent = (tasks.tasks || []).length;
-}
+function renderMetrics(status, queues) {
+  const workers = Object.keys(status || {});
+  const online = workers.filter(w => status[w].status !== 'offline').length;
+  const total  = workers.length;
+  const active = workers.filter(w => status[w].status === 'working').length;
+  const queueDepth = Object.values(queues || {}).reduce((a, b) => a + b, 0);
 
-// ===================== METRICS =====================
-function renderMetrics(status, workers, tasksData) {
-  const workerIds = Object.keys(workers.workers || {}).filter(k => !k.startsWith('$') && !k.startsWith('_'));
-  const online = workerIds.filter(id => {
-    const s = (workers.status || {})[id];
-    return s && s.lastSeen;
+  document.getElementById('metric-workers').textContent   = online;
+  document.getElementById('badge-workers').textContent    = `${online}/${total}`;
+  document.getElementById('badge-workers-nav').textContent = total;
+  document.getElementById('metric-active').textContent    = active;
+  document.getElementById('badge-active').textContent     = active;
+  document.getElementById('metric-queue').textContent     = queueDepth;
+  document.getElementById('badge-queue').textContent      = queueDepth;
+
+  // Completed today — approximate from history if available
+  const completedToday = (global.taskHistory || []).filter(t => {
+    const d = new Date(t.timestamp);
+    const now = new Date();
+    return d.toDateString() === now.toDateString();
   }).length;
-
-  const allTasks = tasksData.tasks || [];
-  const active = allTasks.filter(t => t.status === 'active').length;
-  const queued = allTasks.filter(t => t.status === 'queued').length;
-  const completed = allTasks.filter(t => t.status === 'completed').length;
-  if (completed > completedCount) completedCount = completed;
-
-  document.getElementById('metric-workers').textContent = online;
-  document.getElementById('badge-workers').textContent = `${online}/${workerIds.length}`;
-  document.getElementById('metric-active').textContent = active;
-  document.getElementById('badge-active').textContent = active;
-  document.getElementById('metric-queue').textContent = queued;
-  document.getElementById('badge-queue').textContent = queued;
-  document.getElementById('metric-completed').textContent = completedCount;
-  document.getElementById('badge-completed').textContent = completedCount;
-
-  const pulse = document.getElementById('pulse-dot');
-  const sysStatus = document.getElementById('system-status');
-  if (online === workerIds.length) {
-    sysStatus.textContent = 'Operational';
-    pulse.className = 'pulse';
-  } else if (online > 0) {
-    sysStatus.textContent = 'Degraded';
-    pulse.className = 'pulse degraded';
-  } else {
-    sysStatus.textContent = 'Offline';
-    pulse.className = 'pulse offline';
-  }
+  document.getElementById('metric-completed').textContent  = completedToday;
+  document.getElementById('badge-completed').textContent   = completedToday;
 }
 
-// ===================== WORKERS =====================
-function renderWorkers(data) {
+/* ---------- Workers ---------- */
+const WORKER_META = {
+  sophia: { icon: '👑', color: '#6366f1' },
+  iris:   { icon: '📋', color: '#10b981' },
+  pheme:  { icon: '📢', color: '#f59e0b' },
+  kairos: { icon: '🎯', color: '#ef4444' }
+};
+
+function renderWorkers(workers, status, queues) {
   const grid = document.getElementById('worker-grid');
-  if (!grid) return;
-  grid.innerHTML = buildWorkerCards(data, false);
-}
+  const detail = document.getElementById('worker-grid-detail');
+  if (!grid && !detail) return;
 
-function renderWorkersDetail() {
-  const grid = document.getElementById('worker-grid-detail');
-  if (!grid) return;
-  grid.innerHTML = buildWorkerCards(allWorkersCache, true);
-}
-
-function buildWorkerCards(data, detailed) {
-  const workers = data.workers || {};
-  const status = data.status || {};
-  const queues = data.queues || {};
-  const workerIds = Object.keys(workers).filter(k => !k.startsWith('$') && !k.startsWith('_'));
-
-  return workerIds.map(id => {
-    const w = workers[id];
-    const s = status[id] || { status: 'offline', lastSeen: null, queueLength: 0 };
-    const stateClass = s.status === 'working' ? 'busy' : s.status === 'polling' ? 'online' : s.lastSeen ? 'idle' : 'offline';
-    const stateLabel = s.status === 'working' ? 'Working' : s.status === 'polling' ? 'Online' : s.lastSeen ? 'Idle' : 'Offline';
-    const badgeClass = s.status === 'working' ? 'badge-info' : s.status === 'polling' ? 'badge-success' : s.lastSeen ? 'badge-warning' : 'badge-danger';
-
-    const caps = (w.capabilities || []).slice(0, 5);
-    const tags = caps.map(c => `<span class="worker-tag">${c}</span>`).join('');
-
-    const actions = detailed ? `
-      <div class="worker-actions">
-        <button class="btn btn-sm btn-secondary" onclick="clearWorkerQueue('${id}')">🗑️ Clear Queue</button>
-        <button class="btn btn-sm btn-secondary" onclick="resetWorker('${id}')">🔄 Reset</button>
-        <button class="btn btn-sm btn-secondary" onclick="viewWorkerTasks('${id}')">📋 View Tasks</button>
-      </div>
-    ` : '';
+  const html = Object.entries(workers).map(([id, info]) => {
+    const st = status[id] || {};
+    const meta = WORKER_META[id] || { icon: '🤖', color: '#94a3b8' };
+    const isOnline = st.status !== 'offline';
+    const statusLabel = st.status || 'idle';
+    const lastSeen = st.lastSeen ? timeAgo(st.lastSeen) : 'Never';
+    const qlen = queues[id] || 0;
 
     return `
-      <div class="worker-card ${stateClass}">
+      <div class="worker-card ${isOnline ? 'online' : 'offline'}">
         <div class="worker-header">
-          <div class="worker-avatar">${WORKER_EMOJIS[id] || '🤖'}</div>
+          <div class="worker-avatar" style="background:${meta.color}">${meta.icon}</div>
           <div class="worker-info">
-            <h3>${w.name || WORKER_NAMES[id] || id}</h3>
-            <p>${w.role || w.description || 'Worker'}</p>
+            <div class="worker-name">${info.name}</div>
+            <div class="worker-role">${info.role || info.description || ''}</div>
           </div>
-          <span class="card-badge ${badgeClass}">${stateLabel}</span>
+          <span class="worker-status-badge ${isOnline ? 'badge-success' : 'badge-danger'}">${isOnline ? 'Online' : 'Offline'}</span>
         </div>
-        <div class="worker-tags">${tags}</div>
-        <div class="worker-meta">
-          <div class="worker-meta-item"><span>Queue</span><strong>${queues[id] || 0}</strong></div>
-          <div class="worker-meta-item"><span>Last Seen</span><strong>${s.lastSeen ? timeAgo(s.lastSeen) : 'Never'}</strong></div>
-          <div class="worker-meta-item"><span>Current</span><strong>${s.currentTask ? s.currentTask.slice(0, 8) + '...' : 'None'}</strong></div>
+        <div class="worker-stats">
+          <div><strong>Status:</strong> ${statusLabel}</div>
+          <div><strong>Queue:</strong> ${qlen}</div>
+          <div><strong>Last seen:</strong> ${lastSeen}</div>
         </div>
-        ${actions}
+        <div class="worker-actions">
+          <button class="btn btn-sm btn-secondary" onclick="clearQueue('${id}')">Clear Queue</button>
+          <button class="btn btn-sm btn-secondary" onclick="resetWorker('${id}')">Reset</button>
+        </div>
       </div>
     `;
   }).join('');
+
+  if (grid) grid.innerHTML = html;
+  if (detail) detail.innerHTML = html;
 }
 
-// ===================== TASKS =====================
-function renderTasksFiltered() {
+function renderWorkersDetail() { refreshAll(); }
+
+async function clearQueue(workerId) {
+  try {
+    const res = await post(API.clear(workerId));
+    toast(`Cleared ${res.cleared} tasks from ${workerId}`, 'success');
+    refreshAll();
+  } catch (err) {
+    toast('Clear failed: ' + err.message, 'error');
+  }
+}
+
+async function resetWorker(workerId) {
+  try {
+    const res = await post(API.reset(workerId));
+    toast(res.message, 'success');
+    refreshAll();
+  } catch (err) {
+    toast('Reset failed: ' + err.message, 'error');
+  }
+}
+
+async function clearAllQueues() {
+  for (const id of Object.keys(WORKER_META)) {
+    try { await post(API.clear(id)); } catch (_) {}
+  }
+  toast('All queues cleared', 'success');
+  refreshAll();
+}
+
+/* ---------- Tasks ---------- */
+async function loadTasks() {
+  try {
+    const data = await get(API.tasks);
+    renderTasks(data.tasks || []);
+  } catch (err) {
+    console.error('Tasks load failed:', err);
+  }
+}
+
+function renderTasks(tasks) {
   const tbody = document.getElementById('task-table-full-body');
   if (!tbody) return;
 
   const workerFilter = document.getElementById('task-filter-worker')?.value || '';
   const statusFilter = document.getElementById('task-filter-status')?.value || '';
 
-  let tasks = allTasksCache;
-  if (workerFilter) tasks = tasks.filter(t => t.workerId === workerFilter);
-  if (statusFilter) tasks = tasks.filter(t => t.status === statusFilter);
+  const filtered = tasks.filter(t => {
+    if (workerFilter && t.workerId !== workerFilter) return false;
+    if (statusFilter && t.status !== statusFilter) return false;
+    return true;
+  });
 
-  if (!tasks.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px;">No tasks match your filters</td></tr>`;
-    return;
-  }
+  tbody.innerHTML = filtered.map(t => `
+    <tr>
+      <td><code>${t.id?.slice(0,8) || '—'}</code></td>
+      <td>${t.workerId}</td>
+      <td><span class="badge badge-${t.status === 'completed' ? 'success' : t.status === 'failed' ? 'danger' : t.status === 'active' ? 'info' : 'warning'}">${t.status}</span></td>
+      <td>${escapeHtml(t.description || '')}</td>
+      <td>${t.timestamp ? timeAgo(t.timestamp) : '—'}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="viewTask('${t.id}')">View</button></td>
+    </tr>
+  `).join('');
 
-  tbody.innerHTML = tasks.map(t => {
-    const statusClass = t.status || 'unknown';
-    return `
-      <tr>
-        <td><code style="font-size:11px;background:var(--bg-hover);padding:2px 6px;border-radius:4px;">${t.id?.slice(0, 10) || 'N/A'}</code></td>
-        <td>${WORKER_NAMES[t.workerId] || t.workerId || 'N/A'}</td>
-        <td><span class="status-pill ${statusClass}">${statusClass}</span></td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description || 'No description')}</td>
-        <td>${t.timestamp ? timeAgo(t.timestamp) : '-'}</td>
-        <td>
-          ${t.status === 'queued' ? `<button class="btn btn-sm btn-danger" onclick="cancelTask('${t.id}', '${t.workerId}')">Cancel</button>` : '-'}
-        </td>
-      </tr>
-    `;
-  }).join('');
+  document.getElementById('badge-tasks-nav').textContent = tasks.filter(t => t.status === 'active' || t.status === 'queued').length;
 }
 
-function viewWorkerTasks(workerId) {
-  document.getElementById('task-filter-worker').value = workerId;
-  document.getElementById('task-filter-status').value = '';
-  switchTab('tasks');
+function renderTasksFiltered() { loadTasks(); }
+
+function viewTask(id) {
+  toast('Task detail view coming soon — ID: ' + id.slice(0,8), 'info');
 }
 
-// ===================== ACTIVITY =====================
-function renderActivity(data) {
-  const list = document.getElementById('activity-list');
-  if (!list) return;
-  const logs = (data.logs || []).slice(0, 20);
-
-  if (!logs.length) {
-    list.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:16px;">No recent activity</div>`;
-    return;
-  }
-
-  list.innerHTML = logs.map(log => {
-    const icon = log.level === 'error' ? '⚠️' : log.level === 'warn' ? '⚠️' : log.agent?.includes('Sophia') ? '👤' : '🧠';
-    return `
-      <div class="activity-item">
-        <div class="activity-icon">${icon}</div>
-        <div class="activity-content">
-          <p>${escapeHtml(log.message)}</p>
-          <time>${timeAgo(log.timestamp)} · ${log.agent || 'System'}</time>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-// ===================== REASONING =====================
-async function loadReasoning() {
-  const list = document.getElementById('reasoning-list');
-  if (!list) return;
-  list.innerHTML = '<div class="info-banner">Loading reasoning logs...</div>';
-
-  try {
-    const data = await fetch('/api/reasoning').then(r => r.json());
-    const logs = data.reasoning || [];
-    if (!logs.length) {
-      list.innerHTML = '<div class="info-banner">No reasoning logs yet. Send a command to see Gottfried think.</div>';
-      return;
-    }
-    list.innerHTML = logs.map(log => renderLogItem(log, 'Gottfried')).join('');
-  } catch (err) {
-    list.innerHTML = '<div class="info-banner" style="color:var(--danger);border-color:var(--danger)">Failed to load reasoning logs</div>';
-  }
-}
-
-// ===================== DECISIONS =====================
-async function loadDecisions() {
-  const list = document.getElementById('decisions-list');
-  if (!list) return;
-  list.innerHTML = '<div class="info-banner">Loading decisions...</div>';
-
-  try {
-    const data = await fetch('/api/decisions').then(r => r.json());
-    const logs = data.decisions || [];
-    if (!logs.length) {
-      list.innerHTML = '<div class="info-banner">No decisions yet. Send a command to see Sophia delegate.</div>';
-      return;
-    }
-    list.innerHTML = logs.map(log => renderLogItem(log, log.agent || 'Sophia')).join('');
-  } catch (err) {
-    list.innerHTML = '<div class="info-banner" style="color:var(--danger);border-color:var(--danger)">Failed to load decisions</div>';
-  }
-}
-
-// ===================== ERRORS =====================
-async function loadErrors() {
-  const tbody = document.getElementById('errors-table-body');
-  if (!tbody) return;
-
-  try {
-    const data = await fetch('/api/errors').then(r => r.json());
-    const errors = data.errors || [];
-    const badge = document.getElementById('badge-errors-nav');
-    if (badge) badge.textContent = errors.length;
-
-    if (!errors.length) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No errors logged — all systems healthy</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = errors.map(e => `
-      <tr>
-        <td>${timeAgo(e.timestamp)}</td>
-        <td>${e.agent || 'System'}</td>
-        <td><span class="status-pill failed">${e.level}</span></td>
-        <td>${escapeHtml(e.message)}</td>
-      </tr>
-    `).join('');
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--danger);padding:20px;">Failed to load errors</td></tr>`;
-  }
-}
-
-// ===================== SYSTEM =====================
-async function loadSystem() {
-  const grid = document.getElementById('system-grid');
-  const memCard = document.getElementById('memory-card');
-  if (!grid) return;
-
-  try {
-    const data = await fetch('/api/system').then(r => r.json());
-
-    grid.innerHTML = `
-      <div class="card sys-card">
-        <h4>Runtime</h4>
-        <div class="sys-row"><span>Node.js</span><span>${data.nodeVersion}</span></div>
-        <div class="sys-row"><span>Platform</span><span>${data.platform}</span></div>
-        <div class="sys-row"><span>Environment</span><span>${data.env}</span></div>
-        <div class="sys-row"><span>Port</span><span>${data.port}</span></div>
-        <div class="sys-row"><span>Uptime</span><span>${formatDuration(data.uptime)}</span></div>
-      </div>
-      <div class="card sys-card">
-        <h4>Application</h4>
-        <div class="sys-row"><span>Version</span><span>${data.version}</span></div>
-        <div class="sys-row"><span>Workers</span><span>${(data.workersConfigured || []).join(', ')}</span></div>
-        <div class="sys-row"><span>Server Time</span><span>${new Date(data.timestamp).toLocaleString()}</span></div>
-      </div>
-    `;
-
-    if (memCard && data.memory) {
-      const usedMB = Math.round(data.memory.heapUsed / 1024 / 1024);
-      const totalMB = Math.round(data.memory.heapTotal / 1024 / 1024);
-      const rssMB = Math.round(data.memory.rss / 1024 / 1024);
-      const pct = Math.round((data.memory.heapUsed / data.memory.heapTotal) * 100);
-
-      memCard.innerHTML = `
-        <div class="sys-row"><span>Heap Used</span><span>${usedMB} MB</span></div>
-        <div class="sys-row"><span>Heap Total</span><span>${totalMB} MB</span></div>
-        <div class="sys-row"><span>RSS</span><span>${rssMB} MB</span></div>
-        <div class="memory-bar-wrap"><div class="memory-bar" style="width:${pct}%"></div></div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:right;">${pct}% heap utilization</div>
-      `;
-    }
-  } catch (err) {
-    grid.innerHTML = '<div class="info-banner" style="color:var(--danger)">Failed to load system info</div>';
-  }
-}
-
-// ===================== CONFIG =====================
-async function loadConfig() {
-  const block = document.getElementById('config-block');
-  if (!block) return;
-
-  try {
-    const data = await fetch('/api/config').then(r => r.json());
-    block.textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    block.textContent = 'Failed to load configuration.';
-  }
-}
-
-// ===================== CHAT =====================
+/* ---------- Chat / History ---------- */
 async function loadChat() {
+  try {
+    const data = await get(API.history);
+    const history = data.history || [];
+
+    // Track unread
+    if (currentTab !== 'chat' && history.length > chatMessages.length) {
+      chatUnread += history.length - chatMessages.length;
+      updateChatBadge();
+    }
+
+    chatMessages = history;
+    renderChat(history);
+  } catch (err) {
+    console.error('Chat load failed:', err);
+  }
+}
+
+function renderChat(messages) {
   const list = document.getElementById('chat-list');
   if (!list) return;
-  list.innerHTML = '<div class="info-banner">Loading worker outputs...</div>';
 
-  try {
-    const data = await fetch('/api/history').then(r => r.json());
-    const history = data.history || [];
-    const badge = document.getElementById('badge-chat-nav');
-    if (badge) badge.textContent = history.length;
-
-    if (!history.length) {
-      list.innerHTML = '<div class="info-banner">No worker output yet. Send a command and watch it appear here.</div>';
-      return;
-    }
-
-    list.innerHTML = history.map(item => {
-      const emoji = WORKER_EMOJIS[item.workerId] || '🤖';
-      const name = WORKER_NAMES[item.workerId] || item.workerId;
-      const statusClass = item.status === 'failed' ? 'error' : 'success';
-      const resultText = item.error
-        ? `Error: ${escapeHtml(item.error)}`
-        : escapeHtml(JSON.stringify(item.result, null, 2));
-
-      return `
-        <div class="chat-item">
-          <div class="chat-avatar">${emoji}</div>
-          <div class="chat-body">
-            <div class="chat-header">
-              <span class="chat-name">${name}</span>
-              <span class="chat-time">${timeAgo(item.timestamp)}</span>
-            </div>
-            <div class="chat-desc">${escapeHtml(item.description)}</div>
-            <div class="chat-result ${statusClass}">${resultText}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (err) {
-    list.innerHTML = '<div class="info-banner" style="color:var(--danger);border-color:var(--danger)">Failed to load chat</div>';
+  if (!messages.length) {
+    list.innerHTML = '<div class="chat-empty">No messages yet. Send a command to get started.</div>';
+    return;
   }
+
+  list.innerHTML = messages.map(m => {
+    const meta = WORKER_META[m.workerId] || { icon: '🤖', color: '#94a3b8' };
+    const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+    const resultHtml = m.result
+      ? `<div class="chat-result">${escapeHtml(String(m.result)).replace(/\n/g, '<br>')}</div>`
+      : '';
+    const errorHtml = m.error
+      ? `<div class="chat-error">⚠️ ${escapeHtml(String(m.error))}</div>`
+      : '';
+
+    return `
+      <div class="chat-bubble">
+        <div class="chat-avatar" style="background:${meta.color}">${meta.icon}</div>
+        <div class="chat-body">
+          <div class="chat-meta">
+            <strong>${escapeHtml(WORKER_META[m.workerId]?.name || m.workerId)}</strong>
+            <span class="chat-time">${time}</span>
+            <span class="badge badge-${m.status === 'completed' ? 'success' : m.status === 'failed' ? 'danger' : 'info'}">${m.status}</span>
+          </div>
+          <div class="chat-text">${escapeHtml(m.description || '')}</div>
+          ${resultHtml}
+          ${errorHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Auto-scroll to bottom
+  list.scrollTop = list.scrollHeight;
 }
 
-// ===================== CONTROLS =====================
+function updateChatBadge() {
+  const badge = document.getElementById('badge-chat-nav');
+  if (!badge) return;
+  badge.textContent = chatUnread;
+  badge.style.display = chatUnread > 0 ? 'inline-flex' : 'none';
+}
+
+/* Start chat polling */
+function startChatPolling() {
+  if (chatPollInterval) clearInterval(chatPollInterval);
+  chatPollInterval = setInterval(() => {
+    loadChat();
+  }, 3000);
+}
+
+/* ---------- Reasoning ---------- */
+async function loadReasoning() {
+  try {
+    const data = await get(API.reasoning);
+    const list = document.getElementById('reasoning-list');
+    if (!list) return;
+    const items = data.reasoning || [];
+    list.innerHTML = items.length
+      ? items.map(r => `
+        <div class="log-entry">
+          <div class="log-time">${new Date(r.timestamp).toLocaleString()}</div>
+          <div class="log-msg">${escapeHtml(r.message || JSON.stringify(r))}</div>
+        </div>`).join('')
+      : '<div class="info-banner">No reasoning logs yet.</div>';
+  } catch (err) { console.error(err); }
+}
+
+/* ---------- Decisions ---------- */
+async function loadDecisions() {
+  try {
+    const data = await get(API.decisions);
+    const list = document.getElementById('decisions-list');
+    if (!list) return;
+    const items = data.decisions || [];
+    list.innerHTML = items.length
+      ? items.map(d => `
+        <div class="log-entry">
+          <div class="log-time">${new Date(d.timestamp).toLocaleString()}</div>
+          <div class="log-msg">${escapeHtml(d.message || JSON.stringify(d))}</div>
+        </div>`).join('')
+      : '<div class="info-banner">No decisions logged yet.</div>';
+  } catch (err) { console.error(err); }
+}
+
+/* ---------- Errors ---------- */
+async function loadErrors() {
+  try {
+    const data = await get(API.errors);
+    const tbody = document.getElementById('errors-table-body');
+    if (!tbody) return;
+    const items = data.errors || [];
+    tbody.innerHTML = items.map(e => `
+      <tr>
+        <td>${new Date(e.timestamp).toLocaleString()}</td>
+        <td>${e.agent || e.workerId || '—'}</td>
+        <td><span class="badge badge-${e.level === 'error' ? 'danger' : 'warning'}">${e.level}</span></td>
+        <td>${escapeHtml(e.message || '')}</td>
+      </tr>
+    `).join('');
+    document.getElementById('badge-errors-nav').textContent = items.length;
+  } catch (err) { console.error(err); }
+}
+
+/* ---------- System ---------- */
+async function loadSystem() {
+  try {
+    const data = await get(API.system);
+    const grid = document.getElementById('system-grid');
+    if (grid) {
+      grid.innerHTML = `
+        <div class="card"><div class="card-header"><span class="card-title">Node Version</span></div><div class="card-value">${data.nodeVersion}</div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Platform</span></div><div class="card-value">${data.platform}</div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Uptime</span></div><div class="card-value">${formatDuration(data.uptime)}</div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Environment</span></div><div class="card-value">${data.env}</div></div>
+      `;
+    }
+    const mem = document.getElementById('memory-card');
+    if (mem && data.memory) {
+      mem.innerHTML = `
+        <div class="grid grid-4">
+          <div><strong>RSS</strong><br>${formatBytes(data.memory.rss)}</div>
+          <div><strong>Heap Total</strong><br>${formatBytes(data.memory.heapTotal)}</div>
+          <div><strong>Heap Used</strong><br>${formatBytes(data.memory.heapUsed)}</div>
+          <div><strong>External</strong><br>${formatBytes(data.memory.external)}</div>
+        </div>
+      `;
+    }
+  } catch (err) { console.error(err); }
+}
+
+/* ---------- Config ---------- */
+async function loadConfig() {
+  try {
+    const data = await get(API.config);
+    const block = document.getElementById('config-block');
+    if (block) block.textContent = JSON.stringify(data, null, 2);
+  } catch (err) { console.error(err); }
+}
+
+/* ---------- Command ---------- */
 async function sendCommand() {
   const input = document.getElementById('command-input');
-  const btn = document.getElementById('cmd-btn');
-  const cmd = input.value.trim();
-  if (!cmd) return;
+  const btn   = document.getElementById('cmd-btn');
+  const text  = input.value.trim();
+  if (!text) return;
 
   btn.disabled = true;
-  btn.textContent = 'Sending...';
+  btn.textContent = 'Sending…';
 
   try {
-    const res = await fetch('/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd, source: 'dashboard' })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Command Sent', data.result?.message || 'Task queued', 'success');
-      input.value = '';
-      setTimeout(() => refreshAll(true), 400);
-    } else {
-      showToast('Failed', data.error || 'Unknown error', 'error');
-    }
+    const res = await post(API.command, { command: text, source: 'dashboard' });
+    toast('Command sent: ' + res.parsed?.description?.slice(0, 60), 'success');
+    input.value = '';
+    // Refresh relevant tabs
+    setTimeout(() => {
+      refreshAll();
+      if (currentTab === 'chat') loadChat();
+    }, 500);
   } catch (err) {
-    showToast('Error', err.message, 'error');
+    toast('Send failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Send';
   }
 }
 
-async function clearWorkerQueue(workerId) {
-  if (!confirm(`Clear all queued tasks for ${WORKER_NAMES[workerId] || workerId}?`)) return;
-  try {
-    const res = await fetch(`/api/workers/${workerId}/clear`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Queue Cleared', data.message, 'success');
-      refreshAll(true);
-    } else {
-      showToast('Failed', data.error, 'error');
-    }
-  } catch (err) {
-    showToast('Error', err.message, 'error');
-  }
-}
-
-async function resetWorker(workerId) {
-  if (!confirm(`Reset status for ${WORKER_NAMES[workerId] || workerId}?`)) return;
-  try {
-    const res = await fetch(`/api/workers/${workerId}/reset`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Worker Reset', data.message, 'success');
-      refreshAll(true);
-    } else {
-      showToast('Failed', data.error, 'error');
-    }
-  } catch (err) {
-    showToast('Error', err.message, 'error');
-  }
-}
-
-async function clearAllQueues() {
-  if (!confirm('Clear ALL worker queues? This cannot be undone.')) return;
-  const ids = Object.keys(allWorkersCache.workers || {}).filter(k => !k.startsWith('$') && !k.startsWith('_'));
-  for (const id of ids) {
-    try { await fetch(`/api/workers/${id}/clear`, { method: 'POST' }); } catch (_) {}
-  }
-  showToast('All Queues Cleared', `${ids.length} worker queues emptied`, 'success');
-  refreshAll(true);
-}
-
-function cancelTask(taskId, workerId) {
-  showToast('Not Implemented', 'Task cancellation requires queue modification API', 'error');
-}
-
-// ===================== HELPERS =====================
-function renderLogItem(log, agent) {
-  const level = log.level || 'info';
-  return `
-    <div class="log-item ${level}">
-      <div class="log-time">${new Date(log.timestamp).toLocaleString()} · ${timeAgo(log.timestamp)}</div>
-      <div class="log-agent">${agent}</div>
-      <div class="log-msg">${escapeHtml(log.message)}</div>
-      ${log.context && Object.keys(log.context).length ? `<div class="log-meta">${escapeHtml(JSON.stringify(log.context))}</div>` : ''}
-    </div>
-  `;
-}
-
-function updateSidebar(data) {
-  const status = data.status || {};
-  ['sophia', 'iris', 'pheme', 'kairos'].forEach(id => {
-    const dot = document.getElementById(`nav-${id}`);
-    if (!dot) return;
-    const s = status[id];
-    dot.className = 'dot';
-    if (!s || !s.lastSeen) dot.classList.add('offline');
-    else if (s.status === 'working') dot.classList.add('idle');
-    else dot.classList.add('online');
-  });
-}
-
-function showToast(title, message, type = 'info') {
-  const container = document.getElementById('toasts');
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `<div class="toast-title">${escapeHtml(title)}</div><div class="toast-msg">${escapeHtml(message)}</div>`;
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(100%)';
-    toast.style.transition = '0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+/* ---------- Utilities ---------- */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function timeAgo(iso) {
-  const date = new Date(iso);
-  const now = new Date();
-  const secs = Math.floor((now - date) / 1000);
-  if (secs < 10) return 'Just now';
-  if (secs < 60) return `${secs}s ago`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const diff = Date.now() - new Date(iso).getTime();
+  const sec = Math.floor(diff / 1000);
+  if (sec < 10) return 'Just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
 }
 
 function formatDuration(seconds) {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${hrs}h ${mins}m ${secs}s`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h}h ${m}m ${s}s`;
 }
 
-// ===================== INIT =====================
-function init() {
-  refreshAll(true);
-  setInterval(() => refreshAll(false), 3000);
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B','KB','MB','GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-init();
+/* ---------- Toasts ---------- */
+function toast(message, type = 'info') {
+  const container = document.getElementById('toasts');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => el.classList.add('show'), 10);
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 4000);
+}
+
+/* ---------- Init ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+  refreshAll();
+  startChatPolling();
+
+  // Periodic full refresh every 15s
+  setInterval(() => refreshAll(), 15000);
+});
