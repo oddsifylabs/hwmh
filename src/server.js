@@ -345,13 +345,19 @@ app.get('/queue/:workerId', requireAuth, (req, res) => {
   res.json({ workerId, queue: queues[workerId] });
 });
 
+// Health check for Railway
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'hwmh', timestamp: new Date().toISOString() });
+});
+
 // ============================================
-// SERVER START
+// START SERVER
 // ============================================
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║  HWMH - Hermes Workers Management Hub          ║
