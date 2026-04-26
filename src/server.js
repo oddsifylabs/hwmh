@@ -1,0 +1,371 @@
+/**
+ * HWMH - Hermes Workers Management Hub
+ * Main Server
+ *
+ * Architecture:
+ *   Director (You) -> Sophia (Manager) -> Gottfried (Brain) -> Workers (Iris, Pheme, Kairos)
+ */
+
+const express = require('express');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config();
+
+const { Sophia } = require('./sophia/sophia');
+const { TelegramBotOrchestrator } = require('./telegram/telegram-bots');
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ============================================
+// PERSISTENCE
+// ============================================
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to load state:', err.message);
+  }
+  return null;
+}
+
+function saveState(state) {
+  try {
+    ensureDir(DATA_DIR);
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.error('Failed to save state:', err.message);
+  }
+}
+
+// ============================================
+// AUTHENTICATION
+// ============================================
+const API_KEY = process.env.API_KEY;
+
+function requireAuth(req, res, next) {
+  if (!API_KEY) return next(); // Dev mode
+  const provided = req.headers['x-api-key'] || req.query.apiKey;
+  if (provided !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized. Provide X-API-Key header.' });
+  }
+  next();
+}
+
+// ============================================
+// CONFIG LOADER
+// ============================================
+
+function loadWorkersConfig() {
+  const configPath = process.env.WORKERS_CONFIG_PATH || path.join(__dirname, '..', 'config', 'workers.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      console.log(`[CONFIG] Loaded workers from ${configPath}`);
+      return config;
+    } catch (err) {
+      console.error(`[CONFIG] Failed to load ${configPath}: ${err.message}`);
+    }
+  }
+  return null;
+}
+
+// ============================================
+// DEFAULT WORKER CONFIG
+// ============================================
+
+const DEFAULT_WORKERS = {
+  sophia: {
+    name: 'Sophia Hermes',
+    type: 'director-facing',
+    transport: 'internal',
+    role: 'orchestrator',
+    capabilities: ['task-orchestration', 'flow-control', 'agent-delegation', 'status-synthesis', 'director-reports', 'writing', 'research', 'admin'],
+    description: 'The Manager. The only agent that speaks with the Director. Controls task flow between all agents.',
+    isManager: true,
+    riskTier: 2
+  },
+  iris: {
+    name: 'Iris Hermes',
+    type: 'local',
+    transport: 'poll',
+    capabilities: ['admin', 'schedule', 'research', 'documentation', 'email', 'reminder'],
+    role: 'admin-assistant',
+    description: 'Admin Assistant. Schedules, organizes, researches, and documents.',
+    reportsTo: 'sophia',
+    riskTier: 1
+  },
+  pheme: {
+    name: 'Pheme Hermes',
+    type: 'local',
+    transport: 'poll',
+    capabilities: ['post-x', 'engagement', 'analytics', 'schedule', 'content-strategy', 'curate-content'],
+    role: 'social-media-manager',
+    description: 'Social Media Manager. Creates content, manages engagement, tracks analytics.',
+    reportsTo: 'sophia',
+    riskTier: 2
+  },
+  kairos: {
+    name: 'Kairos Hermes',
+    type: 'local',
+    transport: 'poll',
+    capabilities: ['lead-generation', 'sales', 'marketing', 'crm', 'analytics', 'content-strategy'],
+    role: 'sales-marketing',
+    description: 'Sales & Marketing. Generates leads, manages outreach, tracks pipeline.',
+    reportsTo: 'sophia',
+    riskTier: 2
+  }
+};
+
+const WORKERS = loadWorkersConfig() || DEFAULT_WORKERS;
+
+// ============================================
+// SOPHIA INSTANCE
+// ============================================
+
+const sophia = new Sophia({
+  directorName: process.env.DIRECTOR_NAME || 'Director',
+  gottfried: { verbose: process.env.GOTTFRIED_VERBOSE === 'true' }
+});
+
+// ============================================
+// TASK QUEUES
+// ============================================
+
+const queues = {};
+const workerStatus = {};
+
+function initQueues() {
+  for (const id of Object.keys(WORKERS)) {
+    queues[id] = [];
+    workerStatus[id] = { status: 'idle', lastSeen: null, queueLength: 0 };
+  }
+}
+initQueues();
+
+function loadPersistedState() {
+  const state = loadState();
+  if (state && state.queues) {
+    for (const [id, tasks] of Object.entries(state.queues)) {
+      if (queues[id]) queues[id] = tasks;
+    }
+  }
+}
+loadPersistedState();
+
+function persistState() {
+  const state = { queues, workerStatus, timestamp: new Date().toISOString() };
+  saveState(state);
+}
+
+setInterval(persistState, 30000); // Persist every 30s
+
+// ============================================
+// COMMAND PARSER
+// ============================================
+
+function parseCommand(text) {
+  const trimmed = text.trim();
+
+  // @sophia command (to manager)
+  const sophiaMatch = trimmed.match(/^@sophia\s+(.+)$/i);
+  if (sophiaMatch) {
+    return { type: 'manager-directive', workerId: 'sophia', description: sophiaMatch[1] };
+  }
+
+  // Agent -> Sophia escalation
+  const agentToSophiaMatch = trimmed.match(/^@sophia\s+from\s+@(iris|pheme|kairos)\s*:\s*(.+)$/i);
+  if (agentToSophiaMatch) {
+    return { type: 'agent-to-manager', agentId: agentToSophiaMatch[1].toLowerCase(), description: agentToSophiaMatch[2] };
+  }
+
+  // @worker command
+  const mentionMatch = trimmed.match(/^@(iris|pheme|kairos|sophia)\s+(.+)$/i);
+  if (mentionMatch) {
+    return { type: 'worker-task', workerId: mentionMatch[1].toLowerCase(), description: mentionMatch[2] };
+  }
+
+  return { type: 'unknown', raw: trimmed };
+}
+
+// ============================================
+// ROUTES
+// ============================================
+
+app.get('/', (req, res) => {
+  res.json({
+    name: 'HWMH - Hermes Workers Management Hub',
+    version: '1.0.0',
+    status: 'operational',
+    workers: Object.keys(WORKERS),
+    sophia: 'online',
+    gottfried: 'online'
+  });
+});
+
+// Status endpoint
+app.get('/status', (req, res) => {
+  const report = sophia.statusReport(workerStatus);
+  res.json(report);
+});
+
+// Worker status
+app.get('/workers', (req, res) => {
+  res.json({
+    workers: WORKERS,
+    status: workerStatus,
+    queues: Object.fromEntries(Object.entries(queues).map(([k, v]) => [k, v.length]))
+  });
+});
+
+// Command endpoint
+app.post('/command', requireAuth, async (req, res) => {
+  const { command, source = 'api' } = req.body;
+  if (!command) return res.status(400).json({ error: 'Missing command field' });
+
+  const parsed = parseCommand(command);
+  const taskId = uuidv4();
+
+  if (parsed.type === 'manager-directive') {
+    const result = await sophia.receive({
+      id: taskId,
+      description: parsed.description,
+      source,
+      timestamp: new Date().toISOString()
+    });
+    return res.json({ success: true, taskId, parsed, result });
+  }
+
+  if (parsed.type === 'worker-task') {
+    const task = {
+      id: taskId,
+      workerId: parsed.workerId,
+      description: parsed.description,
+      source,
+      timestamp: new Date().toISOString(),
+      status: 'queued'
+    };
+    queues[parsed.workerId].push(task);
+    workerStatus[parsed.workerId].queueLength = queues[parsed.workerId].length;
+
+    return res.json({
+      success: true,
+      taskId,
+      message: `Task queued for @${parsed.workerId}`,
+      queuePosition: queues[parsed.workerId].length
+    });
+  }
+
+  if (parsed.type === 'agent-to-manager') {
+    const result = await sophia.receive({
+      id: taskId,
+      description: `[From @${parsed.agentId}] ${parsed.description}`,
+      source: 'agent',
+      agentId: parsed.agentId,
+      timestamp: new Date().toISOString()
+    });
+    return res.json({ success: true, taskId, parsed, result });
+  }
+
+  res.status(400).json({ error: 'Could not parse command', parsed });
+});
+
+// Worker polling
+app.get('/poll/:workerId', (req, res) => {
+  const { workerId } = req.params;
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+
+  workerStatus[workerId].lastSeen = new Date().toISOString();
+  workerStatus[workerId].status = 'polling';
+
+  const queue = queues[workerId];
+  const task = queue.find(t => t.status === 'queued');
+
+  if (task) {
+    task.status = 'active';
+    task.startedAt = new Date().toISOString();
+    workerStatus[workerId].status = 'working';
+    workerStatus[workerId].currentTask = task.id;
+    return res.json({ task });
+  }
+
+  workerStatus[workerId].status = 'idle';
+  res.status(404).json({ message: 'No tasks available' });
+});
+
+// Worker completion
+app.post('/complete/:workerId', (req, res) => {
+  const { workerId } = req.params;
+  const { taskId, success, result, error } = req.body;
+
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+
+  const queue = queues[workerId];
+  const taskIndex = queue.findIndex(t => t.id === taskId);
+
+  if (taskIndex === -1) return res.status(404).json({ error: 'Task not found' });
+
+  const task = queue[taskIndex];
+  task.status = success ? 'completed' : 'failed';
+  task.completedAt = new Date().toISOString();
+  task.result = result;
+  task.error = error;
+
+  // Move to history instead of deleting
+  queue.splice(taskIndex, 1);
+
+  workerStatus[workerId].status = 'idle';
+  workerStatus[workerId].queueLength = queue.length;
+  delete workerStatus[workerId].currentTask;
+
+  // Notify Sophia
+  sophia.handleCompletion(workerId, { taskId, success, result, error });
+
+  res.json({ success: true, message: `Task ${taskId} marked as ${task.status}` });
+});
+
+// Queue inspection
+app.get('/queue/:workerId', requireAuth, (req, res) => {
+  const { workerId } = req.params;
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+  res.json({ workerId, queue: queues[workerId] });
+});
+
+// ============================================
+// SERVER START
+// ============================================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`
+╔═══════════════════════════════════════════════════════╗
+║  HWMH - Hermes Workers Management Hub          ║
+║  Version 1.0.0 | MIT License                   ║
+║                                               ║
+║  Manager:  Sophia Hermes                      ║
+║  Brain:    Gottfried (Leibniz Logic Engine)   ║
+║  Workers:  Iris · Pheme · Kairos              ║
+║                                               ║
+║  Listening on port ${PORT}                          ║
+╚═══════════════════════════════════════════════════════╝
+  `);
+
+  // Initialize Telegram bots
+  const telegramBots = new TelegramBotOrchestrator();
+  telegramBots.start();
+});
