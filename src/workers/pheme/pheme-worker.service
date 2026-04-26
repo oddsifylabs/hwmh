@@ -1,0 +1,15 @@
+[Unit]
+Description=HAMH Pheme Hermes Worker
+After=network.target
+
+[Service]
+Type=simple
+User=hamh
+WorkingDirectory=/opt/hamh/workers/pheme
+ExecStart=/usr/bin/node pheme-worker.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
