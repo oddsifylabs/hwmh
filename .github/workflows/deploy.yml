@@ -28,3 +28,11 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --environment production
+
+      - name: Sync environment variables to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway variables set TELEGRAM_ALERT_BOT_TOKEN="${{ secrets.TELEGRAM_ALERT_BOT_TOKEN }}" --service ${{ secrets.RAILWAY_SERVICE_ID }} --environment production || true
+          railway variables set TELEGRAM_ALERT_CHAT_ID="${{ secrets.TELEGRAM_ALERT_CHAT_ID }}" --service ${{ secrets.RAILWAY_SERVICE_ID }} --environment production || true
+          railway variables set HWMH_BASE_URL="https://hwmh.oddsifylabs.com" --service ${{ secrets.RAILWAY_SERVICE_ID }} --environment production || true

@@ -15,6 +15,7 @@ require('dotenv').config();
 
 const { Sophia } = require('./sophia/sophia');
 const { TelegramBotOrchestrator } = require('./telegram/telegram-bots');
+const telegramAlerts = require('./alerts/telegram-alerts');
 
 const app = express();
 app.use(express.json());
@@ -161,6 +162,11 @@ const sophia = new Sophia({
         queues[assignment.workerId].push(task);
         workerStatus[assignment.workerId].queueLength = queues[assignment.workerId].length;
         console.log(`[QUEUE] Task ${assignment.taskId} -> @${assignment.workerId} (${assignment.task.slice(0, 60)})`);
+        // Alert if queue backs up
+        const qLen = queues[assignment.workerId].length;
+        if (qLen >= 10) {
+          telegramAlerts.alertQueueBackup(assignment.workerId, WORKERS[assignment.workerId]?.name || assignment.workerId, qLen);
+        }
       }
     }
   },
@@ -186,6 +192,7 @@ function initQueues() {
   }
 }
 initQueues();
+telegramAlerts.startOfflineMonitor(() => workerStatus, () => WORKERS);
 
 function loadPersistedState() {
   const state = loadState();
@@ -371,6 +378,12 @@ app.post('/complete/:workerId', (req, res) => {
   // Notify Sophia
   sophia.handleCompletion(workerId, { taskId, success, result, error });
 
+  // Telegram alerts
+  if (!success) {
+    telegramAlerts.alertTaskFailed(workerId, WORKERS[workerId]?.name || workerId, taskId, error);
+    telegramAlerts.recordError();
+  }
+
   res.json({ success: true, message: `Task ${taskId} marked as ${task.status}` });
 });
 
@@ -528,6 +541,10 @@ app.listen(PORT, HOST, () => {
 ║  Listening on port ${PORT}                          ║
 ╚═══════════════════════════════════════════════════════╝
   `);
+
+  // Initialize Telegram alert bot
+  telegramAlerts.init();
+  telegramAlerts.alertSystemRestart(process.uptime());
 
   // Initialize Telegram bots
   const telegramBots = new TelegramBotOrchestrator();
