@@ -438,7 +438,7 @@ app.get('/api/logs', (req, res) => {
 
 // Health check for Railway
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'hwmh', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'hwmh', version: '1.0.1', timestamp: new Date().toISOString() });
 });
 
 // ============================================
