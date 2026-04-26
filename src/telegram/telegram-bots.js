@@ -82,12 +82,21 @@ const hwmhApi = axios.create({
   }
 });
 
-async function sendCommand(command, source = 'telegram') {
+async function sendCommand(command, source = 'telegram', meta = {}) {
   try {
-    const { data } = await hwmhApi.post('/command', { command, source });
+    const { data } = await hwmhApi.post('/command', { command, source, ...meta });
     return data;
   } catch (err) {
     return { success: false, error: err.message };
+  }
+}
+
+async function getNotifications(chatId) {
+  try {
+    const { data } = await hwmhApi.get(`/notifications/${chatId}`);
+    return data.notifications || [];
+  } catch (err) {
+    return [];
   }
 }
 
@@ -108,6 +117,7 @@ class TelegramBotOrchestrator {
   constructor() {
     this.bots = {};
     this.active = false;
+    this.activeChats = new Set(); // Track chats with pending tasks
   }
 
   start() {
@@ -133,10 +143,13 @@ class TelegramBotOrchestrator {
       console.log('─'.repeat(40));
       for (const [id, bot] of Object.entries(this.bots)) {
         const cfg = BOT_CONFIG[id];
-        console.log(`${cfg.color}${cfg.name}${'\x1b[0m'} — @${cfg.role}`);
+        console.log(`${cfg.color}${cfg.name}\x1b[0m — @${cfg.role}`);
       }
       console.log('─'.repeat(40) + '\n');
     }
+
+    // Start notification polling for completions
+    this.startNotificationPolling();
   }
 
   setupHandlers(botId, bot) {
@@ -263,11 +276,13 @@ ${this.getExamplesForBot(botId)}
         await this.handleGottfried(bot, chatId, text, user);
         break;
       case 'sophia':
+        this.activeChats.add(chatId); // Track for notifications
         await this.handleSophia(bot, chatId, text, user);
         break;
       case 'iris':
       case 'pheme':
       case 'kairos':
+        this.activeChats.add(chatId); // Track for notifications
         await this.handleWorker(botId, bot, chatId, text, user);
         break;
     }
@@ -307,46 +322,30 @@ ${this.getExamplesForBot(botId)}
   // SOPHIA: Manager Delegation
   // ============================================
   async handleSophia(bot, chatId, text, user) {
-    // Check if it's a @worker command
-    const mentionMatch = text.match(/^@(iris|pheme|kairos)\s+(.+)$/i);
+    const meta = { chatId, user };
 
-    if (mentionMatch) {
-      const workerId = mentionMatch[1].toLowerCase();
-      const taskDesc = mentionMatch[2];
+    const thinkingMsg = await bot.sendMessage(chatId, '📋 Sophia is consulting Gottfried...');
 
-      const thinkingMsg = await bot.sendMessage(chatId, `📋 Sophia is delegating to @${workerId}...`);
-
-      const result = await sendCommand(`@${workerId} ${taskDesc}`, 'telegram');
-
-      let response;
-      if (result.success) {
-        response = `✅ *Task Delegated*\n\n*To:* @${workerId}\n*Task:* ${taskDesc}\n*ID:* \`${result.taskId}\`\n*Queue Position:* ${result.queuePosition || 1}`;
-      } else {
-        response = `❌ *Delegation Failed*\n\n${result.error || 'Unknown error'}`;
-      }
-
-      await bot.editMessageText(response, {
-        chat_id: chatId,
-        message_id: thinkingMsg.message_id,
-        parse_mode: 'Markdown'
-      });
-      return;
-    }
-
-    // General inquiry to Sophia
-    const thinkingMsg = await bot.sendMessage(chatId, '📋 Sophia is processing...');
-
-    // Consult Gottfried for reasoning
-    const result = await sendCommand(`@sophia ${text}`, 'telegram');
+    // Always route through Sophia + Gottfried
+    const result = await sendCommand(text, 'telegram', meta);
 
     let response;
     if (result.success && result.result?.message) {
       response = `📋 *Sophia*\n\n${result.result.message}`;
+
+      // Show delegation details if tasks were assigned
+      if (result.result.delegation?.assignments?.length > 0) {
+        response += '\n\n*Delegated tasks:*\n';
+        for (const a of result.result.delegation.assignments) {
+          response += `• @${a.workerId}: ${a.task.slice(0, 80)}\n`;
+        }
+      }
+
       if (result.result.requiresClarification) {
         response += '\n\n_⚠️ I need clarification to proceed._';
       }
     } else {
-      response = `📋 *Sophia*\n\nI've noted your request: "${text}"\n\n_Use @iris, @pheme, or @kairos to delegate tasks directly._`;
+      response = `📋 *Sophia*\n\nI've noted your request: "${text}"\n\n_I'll route this through Gottfried and get back to you._`;
     }
 
     await bot.editMessageText(response, {
@@ -357,14 +356,61 @@ ${this.getExamplesForBot(botId)}
   }
 
   // ============================================
+  // NOTIFICATION POLLING: Check for completed tasks
+  // ============================================
+  startNotificationPolling() {
+    const POLL_INTERVAL = 5000; // 5 seconds
+
+    setInterval(async () => {
+      if (this.activeChats.size === 0) return;
+
+      for (const chatId of this.activeChats) {
+        try {
+          const notifications = await getNotifications(chatId);
+          if (notifications.length === 0) continue;
+
+          // Send completion messages via Sophia bot
+          const sophiaBot = this.bots['sophia'];
+          if (!sophiaBot) continue;
+
+          for (const n of notifications) {
+            let msg;
+            if (n.success) {
+              msg = `✅ *@${n.workerId} completed your task!*\n\n*Original:* ${n.originalDescription?.slice(0, 100) || ''}\n\n*Result:*\n${(n.result || 'Done').slice(0, 800)}`;
+            } else {
+              msg = `❌ *@${n.workerId} failed to complete the task.*\n\n*Error:* ${n.error || 'Unknown error'}`;
+            }
+            await sophiaBot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+          }
+        } catch (err) {
+          // Silently ignore polling errors
+        }
+      }
+    }, POLL_INTERVAL);
+  }
+
+  async pollAndNotify(chatId, bot) {
+    const notifications = await getNotifications(chatId);
+    for (const n of notifications) {
+      let msg;
+      if (n.success) {
+        msg = `✅ *@${n.workerId} completed your task!*\n\n*Original:* ${n.originalDescription?.slice(0, 100) || ''}\n\n*Result:*\n${(n.result || 'Done').slice(0, 800)}`;
+      } else {
+        msg = `❌ *@${n.workerId} failed to complete the task.*\n\n*Error:* ${n.error || 'Unknown error'}`;
+      }
+      await bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+    }
+  }
+
+  // ============================================
   // WORKERS: Direct Task Execution
   // ============================================
   async handleWorker(workerId, bot, chatId, text, user) {
     const config = BOT_CONFIG[workerId];
     const thinkingMsg = await bot.sendMessage(chatId, `${config.name} is working...`);
 
-    // Send task to HWMH
-    const result = await sendCommand(`@${workerId} ${text}`, 'telegram');
+    // Send task to HWMH (routes through Sophia + Gottfried)
+    const result = await sendCommand(`@${workerId} ${text}`, 'telegram', { chatId, user });
 
     let response;
     if (result.success) {

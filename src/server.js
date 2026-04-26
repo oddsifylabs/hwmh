@@ -137,9 +137,35 @@ const WORKERS = loadWorkersConfig() || DEFAULT_WORKERS;
 // SOPHIA INSTANCE
 // ============================================
 
+const pendingNotifications = new Map(); // taskId -> { chatId, source, user }
+
 const sophia = new Sophia({
   directorName: process.env.DIRECTOR_NAME || 'Director',
-  gottfried: { verbose: process.env.GOTTFRIED_VERBOSE === 'true' }
+  gottfried: { verbose: process.env.GOTTFRIED_VERBOSE === 'true' },
+  onDelegate: (assignments) => {
+    // Push tasks to actual worker queues
+    for (const assignment of assignments) {
+      const task = {
+        id: assignment.taskId,
+        workerId: assignment.workerId,
+        description: assignment.task,
+        status: 'queued',
+        timestamp: new Date().toISOString(),
+        parentTaskId: assignment.parentTaskId
+      };
+      if (queues[assignment.workerId]) {
+        queues[assignment.workerId].push(task);
+        workerStatus[assignment.workerId].queueLength = queues[assignment.workerId].length;
+        console.log(`[QUEUE] Task ${assignment.taskId} -> @${assignment.workerId} (${assignment.task.slice(0, 60)})`);
+      }
+    }
+  },
+  onNotify: (notification) => {
+    // Store notification for Telegram layer to pick up
+    // The Telegram bots poll or use a webhook to check for notifications
+    pendingNotifications.set(notification.taskId, notification);
+    console.log(`[NOTIFY] Task ${notification.taskId} completed by @${notification.workerId}, success=${notification.success}`);
+  }
 });
 
 // ============================================
@@ -234,40 +260,37 @@ app.get('/workers', (req, res) => {
 
 // Command endpoint
 app.post('/command', requireAuth, async (req, res) => {
-  const { command, source = 'api' } = req.body;
+  const { command, source = 'api', chatId, user } = req.body;
   if (!command) return res.status(400).json({ error: 'Missing command field' });
 
   const parsed = parseCommand(command);
   const taskId = uuidv4();
 
-  if (parsed.type === 'manager-directive') {
+  if (parsed.type === 'manager-directive' || parsed.type === 'unknown') {
+    // Route everything through Sophia + Gottfried
+    const desc = parsed.type === 'unknown' ? parsed.raw : parsed.description;
     const result = await sophia.receive({
       id: taskId,
-      description: parsed.description,
+      description: desc,
       source,
+      chatId,
+      user,
       timestamp: new Date().toISOString()
     });
-    return res.json({ success: true, taskId, parsed, result });
+    return res.json({ success: true, taskId, parsed: { type: 'manager-directive', description: desc }, result });
   }
 
   if (parsed.type === 'worker-task') {
-    const task = {
+    // Even @worker commands go through Sophia first
+    const result = await sophia.receive({
       id: taskId,
-      workerId: parsed.workerId,
-      description: parsed.description,
+      description: command,
       source,
-      timestamp: new Date().toISOString(),
-      status: 'queued'
-    };
-    queues[parsed.workerId].push(task);
-    workerStatus[parsed.workerId].queueLength = queues[parsed.workerId].length;
-
-    return res.json({
-      success: true,
-      taskId,
-      message: `Task queued for @${parsed.workerId}`,
-      queuePosition: queues[parsed.workerId].length
+      chatId,
+      user,
+      timestamp: new Date().toISOString()
     });
+    return res.json({ success: true, taskId, parsed, result });
   }
 
   if (parsed.type === 'agent-to-manager') {
@@ -276,12 +299,27 @@ app.post('/command', requireAuth, async (req, res) => {
       description: `[From @${parsed.agentId}] ${parsed.description}`,
       source: 'agent',
       agentId: parsed.agentId,
+      chatId,
+      user,
       timestamp: new Date().toISOString()
     });
     return res.json({ success: true, taskId, parsed, result });
   }
 
   res.status(400).json({ error: 'Could not parse command', parsed });
+});
+
+// Notification polling for Telegram bots
+app.get('/notifications/:chatId', requireAuth, (req, res) => {
+  const { chatId } = req.params;
+  const notifications = [];
+  for (const [taskId, notification] of pendingNotifications.entries()) {
+    if (String(notification.chatId) === String(chatId)) {
+      notifications.push(notification);
+      pendingNotifications.delete(taskId);
+    }
+  }
+  res.json({ chatId, notifications, count: notifications.length });
 });
 
 // Worker polling

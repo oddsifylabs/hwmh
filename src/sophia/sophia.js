@@ -21,6 +21,9 @@ class Sophia {
     this.taskHistory = [];
     this.maxHistory = options.maxHistory || 500;
     this.directorName = options.directorName || 'Director';
+    this.onDelegate = options.onDelegate || null;   // callback(assignments)
+    this.onNotify = options.onNotify || null;       // callback(notification)
+    this.pendingContexts = new Map();               // taskId -> { chatId, source, user }
   }
 
   log(level, message, meta = {}) {
@@ -53,7 +56,7 @@ class Sophia {
 
     // If approved, delegate to workers
     if (reasoning.confidence > 0.5) {
-      const delegationResult = await this.delegateToWorkers(reasoning.delegation);
+      const delegationResult = await this.delegateToWorkers(reasoning.delegation, command);
       response.delegation = delegationResult;
     }
 
@@ -69,7 +72,7 @@ class Sophia {
    * FORMULATE RESPONSE: What to say back to the Director.
    */
   formulateResponse(reasoning) {
-    const { analysis, plan, confidence, delegation } = reasoning;
+    const { analysis, plan, confidence } = reasoning;
     const primaryWorker = plan.primaryWorker;
     const workerNames = {
       iris: 'Iris Hermes (Admin Assistant)',
@@ -101,21 +104,37 @@ class Sophia {
   /**
    * DELEGATE TO WORKERS: Push tasks to worker queues.
    */
-  async delegateToWorkers(delegation) {
+  async delegateToWorkers(delegation, command) {
     const results = [];
 
     for (const assignment of delegation.assignments) {
-      // In production, this would push to the task queue
-      // For now, log the delegation
-      this.log('info', `Delegating to @${assignment.workerId}: ${assignment.task}`, {
+      const taskId = assignment.taskId || require('uuid').v4();
+
+      // Store context so we can notify the original sender on completion
+      this.pendingContexts.set(taskId, {
+        parentTaskId: command.id,
+        chatId: command.chatId,
+        source: command.source,
+        user: command.user,
+        originalDescription: command.description
+      });
+
+      // Push to actual queue via callback
+      if (this.onDelegate) {
+        this.onDelegate([{ ...assignment, taskId, parentTaskId: command.id }]);
+      }
+
+      this.log('info', `Delegated to @${assignment.workerId}: ${assignment.task}`, {
         step: assignment.step,
-        priority: assignment.priority
+        priority: assignment.priority,
+        taskId
       });
 
       results.push({
         workerId: assignment.workerId,
         assigned: true,
         task: assignment.task,
+        taskId,
         status: 'queued'
       });
     }
@@ -150,14 +169,12 @@ class Sophia {
   suggestNextActions(workersState) {
     const suggestions = [];
 
-    // Check for idle workers
     for (const [workerId, state] of Object.entries(workersState)) {
       if (state.status === 'idle') {
         suggestions.push(`${workerId} is idle. Consider assigning a ${this.getWorkerRole(workerId)} task.`);
       }
     }
 
-    // Check queue lengths
     const overloaded = Object.entries(workersState)
       .filter(([_, s]) => (s.queueLength || 0) > 5)
       .map(([id, _]) => id);
@@ -182,10 +199,32 @@ class Sophia {
    * HANDLE WORKER COMPLETION: Process results from workers.
    */
   async handleCompletion(workerId, result) {
-    this.log('info', `Task completed by @${workerId}`, { success: result.success });
+    this.log('info', `Task completed by @${workerId}`, { success: result.success, taskId: result.taskId });
+
+    // Get the original context
+    const ctx = this.pendingContexts.get(result.taskId);
 
     // Reflect through Gottfried
     const reflection = this.gottfried.reflect(result.taskId, result);
+
+    // Notify the original sender if we have context
+    if (ctx && this.onNotify) {
+      this.onNotify({
+        type: 'completion',
+        taskId: result.taskId,
+        workerId,
+        success: result.success,
+        result: result.result,
+        error: result.error,
+        chatId: ctx.chatId,
+        source: ctx.source,
+        user: ctx.user,
+        originalDescription: ctx.originalDescription
+      });
+    }
+
+    // Clean up context
+    this.pendingContexts.delete(result.taskId);
 
     // Notify Director if high-priority or failed
     if (!result.success || result.priority === 'high') {
