@@ -232,15 +232,9 @@ function parseCommand(text) {
 // ROUTES
 // ============================================
 
+// Root serves dashboard
 app.get('/', (req, res) => {
-  res.json({
-    name: 'HWMH - Hermes Workers Management Hub',
-    version: '1.0.0',
-    status: 'operational',
-    workers: Object.keys(WORKERS),
-    sophia: 'online',
-    gottfried: 'online'
-  });
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
 // Status endpoint
@@ -381,6 +375,48 @@ app.get('/queue/:workerId', requireAuth, (req, res) => {
   const { workerId } = req.params;
   if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
   res.json({ workerId, queue: queues[workerId] });
+});
+
+// ============================================
+// DASHBOARD API
+// ============================================
+
+// All tasks across all workers (for dashboard)
+app.get('/api/tasks', (req, res) => {
+  const allTasks = [];
+  for (const [workerId, queue] of Object.entries(queues)) {
+    for (const task of queue) {
+      allTasks.push({ ...task, workerId });
+    }
+  }
+  // Also include recently completed from state file if available
+  try {
+    const state = loadState();
+    if (state && state.history) {
+      for (const task of state.history) {
+        allTasks.push(task);
+      }
+    }
+  } catch (_) {}
+  allTasks.sort((a, b) => new Date(b.timestamp || b.startedAt || 0) - new Date(a.timestamp || a.startedAt || 0));
+  res.json({ tasks: allTasks });
+});
+
+// Recent logs/activity (for dashboard)
+app.get('/api/logs', (req, res) => {
+  const logs = [];
+  // Sophia logs
+  if (sophia.taskHistory && sophia.taskHistory.length) {
+    logs.push(...sophia.taskHistory.slice(-100));
+  }
+  // Gottfried logs
+  if (sophia.gottfried && sophia.gottfried.reasoningLog && sophia.gottfried.reasoningLog.length) {
+    for (const entry of sophia.gottfried.reasoningLog.slice(-50)) {
+      logs.push({ ...entry, agent: 'Gottfried' });
+    }
+  }
+  logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  res.json({ logs: logs.slice(0, 100) });
 });
 
 // Health check for Railway
