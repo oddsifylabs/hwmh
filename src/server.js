@@ -256,6 +256,9 @@ app.get('/status', (req, res) => {
 
 // Worker status
 app.get('/workers', (req, res) => {
+  // Sophia runs inside the server — she's always online when this responds
+  workerStatus.sophia.lastSeen = new Date().toISOString();
+  workerStatus.sophia.status = 'idle';
   res.json({
     workers: WORKERS,
     status: workerStatus,
