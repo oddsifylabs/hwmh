@@ -107,6 +107,7 @@ async function refreshAll(force = false) {
     workersData = data;
     renderWorkers(data.workers, data.status, data.queues);
     renderMetrics(data.status, data.queues);
+    loadActivityFeed();
     if (currentTab === 'tasks') loadTasks();
     if (currentTab === 'system') loadSystem();
     if (currentTab === 'director') loadRequests();
@@ -646,6 +647,64 @@ function updateIntelBadge() {
   if (!badge) return;
   badge.textContent = chatUnread;
   badge.style.display = chatUnread > 0 ? 'inline-flex' : 'none';
+}
+
+/* ---------- Activity Feed ---------- */
+async function loadActivityFeed() {
+  try {
+    const [histData, reqData] = await Promise.all([
+      get(API.history),
+      get(API.requests)
+    ]);
+
+    const history = histData.history || [];
+    const requests = (reqData.requests || []).filter(r => r.status !== 'pending');
+
+    const events = [
+      ...history.map(h => ({
+        type: h.status === 'completed' ? 'success' : h.status === 'failed' ? 'error' : 'info',
+        text: h.status === 'completed'
+          ? `<strong>${escapeHtml(WORKER_META[h.workerId]?.name || h.workerId)}</strong> completed a task`
+          : h.status === 'failed'
+          ? `<strong>${escapeHtml(WORKER_META[h.workerId]?.name || h.workerId)}</strong> failed a task`
+          : `<strong>${escapeHtml(WORKER_META[h.workerId]?.name || h.workerId)}</strong> is working`,
+        detail: escapeHtml(h.description || '').slice(0, 80),
+        time: h.timestamp
+      })),
+      ...requests.map(r => ({
+        type: r.status === 'completed' ? 'success' : r.status === 'failed' ? 'error' : 'info',
+        text: `Task <strong>${escapeHtml(r.title)}</strong> marked ${r.status}`,
+        detail: r.worker === 'auto' ? 'Auto-assigned' : `Assigned to ${escapeHtml(WORKER_META[r.worker]?.name || r.worker)}`,
+        time: r.completedAt || r.createdAt
+      }))
+    ];
+
+    events.sort((a, b) => new Date(b.time) - new Date(a.time));
+    renderActivityFeed(events.slice(0, 20));
+  } catch (err) {
+    console.error('Activity feed failed:', err);
+  }
+}
+
+function renderActivityFeed(events) {
+  const dashboardFeed = document.getElementById('activity-feed');
+  const systemFeed = document.getElementById('activity-feed-system');
+
+  const html = events.length
+    ? events.map(e => `
+      <div class="activity-item">
+        <div class="activity-dot ${e.type}"></div>
+        <div class="activity-content">
+          <div>${e.text}</div>
+          ${e.detail ? `<div style="font-size:12px;margin-top:2px">${e.detail}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${timeAgo(e.time)}</div>
+        </div>
+      </div>
+    `).join('')
+    : `<div class="empty-state" style="padding:24px"><div class="empty-state-text">No activity yet. Send a task to get started.</div></div>`;
+
+  if (dashboardFeed) dashboardFeed.innerHTML = html;
+  if (systemFeed) systemFeed.innerHTML = html;
 }
 
 /* Start chat polling */

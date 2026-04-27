@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWMH — Hermes Workers Management Hub</title>
-  <link rel="stylesheet" href="/css/dashboard.css?v=4">
+  <link rel="stylesheet" href="/css/dashboard.css?v=5">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" href="/favicon.png">
 </head>
@@ -136,99 +136,102 @@
         </div>
         <div class="info-banner">Direct communication channel with Sophia Hermes, your Manager Agent. All messages are logged and tasks are auto-delegated.</div>
 
-        <!-- New Task Form embedded in Director tab -->
         <div class="grid grid-2" style="margin-bottom:24px">
-          <div class="request-form card">
-            <h3>New Task</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Title</label>
-                <input type="text" id="req-title" placeholder="e.g., Research competitor pricing">
+          <!-- LEFT COLUMN: New Task + Recent Tasks -->
+          <div class="director-left-col" style="display:flex;flex-direction:column;gap:16px">
+            <div class="request-form card">
+              <h3>New Task</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Title</label>
+                  <input type="text" id="req-title" placeholder="e.g., Research competitor pricing">
+                </div>
+                <div class="form-group">
+                  <label>Category</label>
+                  <select id="req-category">
+                    <option value="general">General</option>
+                    <option value="research">Research</option>
+                    <option value="content">Content</option>
+                    <option value="development">Development</option>
+                    <option value="social">Social Media</option>
+                    <option value="sales">Sales / Marketing</option>
+                    <option value="admin">Admin</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Assign To</label>
+                  <select id="req-worker">
+                    <option value="auto">Auto (Sophia decides)</option>
+                    <option value="iris">Iris — Admin & Research</option>
+                    <option value="pheme">Pheme — Social Media</option>
+                    <option value="kairos">Kairos — Sales & Marketing</option>
+                    <option value="sophia">Sophia — Manager</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Priority</label>
+                  <select id="req-priority">
+                    <option value="low">Low</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
               </div>
               <div class="form-group">
-                <label>Category</label>
-                <select id="req-category">
-                  <option value="general">General</option>
-                  <option value="research">Research</option>
-                  <option value="content">Content</option>
-                  <option value="development">Development</option>
-                  <option value="social">Social Media</option>
-                  <option value="sales">Sales / Marketing</option>
-                  <option value="admin">Admin</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Assign To</label>
-                <select id="req-worker">
-                  <option value="auto">Auto (Sophia decides)</option>
-                  <option value="iris">Iris — Admin & Research</option>
-                  <option value="pheme">Pheme — Social Media</option>
-                  <option value="kairos">Kairos — Sales & Marketing</option>
-                  <option value="sophia">Sophia — Manager</option>
-                </select>
+                <label>Description</label>
+                <textarea id="req-description" rows="4" placeholder="Describe what needs to be done in detail..."></textarea>
               </div>
               <div class="form-group">
-                <label>Priority</label>
-                <select id="req-priority">
-                  <option value="low">Low</option>
-                  <option value="normal" selected>Normal</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
+                <label>Tags (comma-separated)</label>
+                <input type="text" id="req-tags" placeholder="e.g., website, competitors, q2-2026">
+              </div>
+              <div class="request-templates">
+                <label>Quick Templates:</label>
+                <div class="template-chips">
+                  <button class="chip" onclick="fillTemplate('research')">Research</button>
+                  <button class="chip" onclick="fillTemplate('content')">Write Content</button>
+                  <button class="chip" onclick="fillTemplate('social')">Social Post</button>
+                  <button class="chip" onclick="fillTemplate('code')">Code Task</button>
+                  <button class="chip" onclick="fillTemplate('email')">Draft Email</button>
+                  <button class="chip" onclick="fillTemplate('meeting')">Schedule Meeting</button>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">Submit Task</button>
+                <button class="btn btn-secondary" onclick="clearRequestForm()">Clear</button>
               </div>
             </div>
-            <div class="form-group">
-              <label>Description</label>
-              <textarea id="req-description" rows="4" placeholder="Describe what needs to be done in detail..."></textarea>
-            </div>
-            <div class="form-group">
-              <label>Tags (comma-separated)</label>
-              <input type="text" id="req-tags" placeholder="e.g., website, competitors, q2-2026">
-            </div>
-            <div class="request-templates">
-              <label>Quick Templates:</label>
-              <div class="template-chips">
-                <button class="chip" onclick="fillTemplate('research')">Research</button>
-                <button class="chip" onclick="fillTemplate('content')">Write Content</button>
-                <button class="chip" onclick="fillTemplate('social')">Social Post</button>
-                <button class="chip" onclick="fillTemplate('code')">Code Task</button>
-                <button class="chip" onclick="fillTemplate('email')">Draft Email</button>
-                <button class="chip" onclick="fillTemplate('meeting')">Schedule Meeting</button>
+
+            <div class="card">
+              <h3>Recent Tasks</h3>
+              <div class="table-wrap">
+                <table class="data-table" id="requests-table">
+                  <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
+                  <tbody id="requests-table-body"></tbody>
+                </table>
               </div>
-            </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">Submit Task</button>
-              <button class="btn btn-secondary" onclick="clearRequestForm()">Clear</button>
             </div>
           </div>
 
-          <div class="card">
-            <h3>Recent Tasks</h3>
-            <div class="table-wrap">
-              <table class="data-table" id="requests-table">
-                <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
-                <tbody id="requests-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="director-chat-container">
-          <div class="director-chat-messages" id="director-chat-messages"></div>
-          <div class="director-chat-input">
-            <div class="director-quick-actions">
-              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">Status Report</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">Auto Delegate</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">Review Queues</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">Daily Summary</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">Check Errors</button>
-            </div>
-            <div class="director-input-row">
-              <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
-              <button class="btn btn-primary" id="director-send-btn" onclick="sendDirectorMessage()">Send</button>
+          <!-- RIGHT COLUMN: Chat with Sophia -->
+          <div class="director-chat-container" style="height:auto;min-height:500px">
+            <div class="director-chat-messages" id="director-chat-messages"></div>
+            <div class="director-chat-input">
+              <div class="director-quick-actions">
+                <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">Status Report</button>
+                <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">Auto Delegate</button>
+                <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">Review Queues</button>
+                <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">Daily Summary</button>
+                <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">Check Errors</button>
+              </div>
+              <div class="director-input-row">
+                <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
+                <button class="btn btn-primary" id="director-send-btn" onclick="sendDirectorMessage()">Send</button>
+              </div>
             </div>
           </div>
         </div>
@@ -359,7 +362,7 @@
     </div>
   </footer>
 
-  <script src="/js/icons.js?v=4"></script>
-  <script src="/js/dashboard.js?v=4"></script>
+  <script src="/js/icons.js?v=5"></script>
+  <script src="/js/dashboard.js?v=5"></script>
 </body>
 </html>
