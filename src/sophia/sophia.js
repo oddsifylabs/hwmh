@@ -73,6 +73,7 @@ class Sophia {
    */
   formulateResponse(reasoning) {
     const { analysis, plan, confidence } = reasoning;
+    const primaryIntent = analysis.intents[0];
     const primaryWorker = plan.primaryWorker;
     const workerNames = {
       iris: 'Iris Hermes (Admin Assistant)',
@@ -84,21 +85,26 @@ class Sophia {
 
     if (confidence > 0.85) {
       message = `Understood. I'm delegating this to ${workerNames[primaryWorker] || primaryWorker}. Estimated complexity: ${plan.estimatedComplexity} steps.`;
-    } else if (confidence > 0.6) {
-      message = `I've analyzed your request. My best assessment is to route this to ${workerNames[primaryWorker] || primaryWorker}, but I'd like to confirm: ${analysis.intents[0]?.type}?`;
+    } else if (confidence >= 0.5) {
+      // Medium confidence — still route it, but note the ambiguity
+      const intentList = analysis.intents.map(i => i.type).join(', ');
+      message = `Received. This looks like ${primaryIntent.type} to me — I'm routing it to ${workerNames[primaryWorker] || primaryWorker}. If that's not right, let me know and I'll reassign.`;
     } else {
-      message = `I'm not entirely clear on the best approach for this. Could you clarify if you're looking for ${analysis.intents.map(i => i.type).join(', ')}?`;
+      // Very low confidence — ask for clarification but still be helpful
+      message = `I want to make sure I handle this correctly. Could you tell me if this is related to: scheduling, research, social media, sales, or something else?`;
     }
 
-    return {
+    const response = {
       from: this.name,
       to: this.directorName,
       message,
+      reply: message, // Conversational reply for chat UI
       confidence,
       suggestedWorker: primaryWorker,
       reasoning: reasoning.reasoning,
-      requiresClarification: confidence <= 0.6
+      requiresClarification: confidence < 0.5
     };
+    return response;
   }
 
   /**
