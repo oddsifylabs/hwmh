@@ -649,16 +649,24 @@ function renderDirectorMessages(messages, directorName) {
 
   container.innerHTML = messages.map(m => {
     const isDirector = m.sender === 'director';
+    const isTaskComplete = m.type === 'task-complete';
+    const isTaskFailed = m.type === 'task-failed';
     const avatarIcon = isDirector ? 'profiles' : 'sophia';
-    const color = isDirector ? '#6366f1' : '#f59e0b';
+    const color = isDirector ? '#6366f1' : (isTaskComplete ? '#10b981' : isTaskFailed ? '#ef4444' : '#f59e0b');
     const name = isDirector ? directorName : 'Sophia Hermes';
 
+    // Parse simple markdown from server
+    let textHtml = escapeHtml(m.text || '')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/```(.*?)```/gs, '<pre style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:12px;overflow:auto"><code>$1</code></pre>')
+      .replace(/\n/g, '<br>');
+
     return `
-      <div class="director-msg ${m.sender}">
+      <div class="director-msg ${m.sender}" style="${isTaskComplete || isTaskFailed ? 'border-left:3px solid ' + color + ';padding-left:12px' : ''}">
         <div class="director-msg-avatar" style="background:${color};color:#fff">${icon(avatarIcon, 20)}</div>
         <div class="director-msg-body">
-          <div class="director-msg-name">${name}</div>
-          <div class="director-msg-text">${escapeHtml(m.text || '')}</div>
+          <div class="director-msg-name">${name}${isTaskComplete ? ' — Task Complete' : isTaskFailed ? ' — Task Failed' : ''}</div>
+          <div class="director-msg-text">${textHtml}</div>
           <div class="director-msg-time">${new Date(m.timestamp).toLocaleString()}</div>
           ${m.delegated && m.delegated.length ? `
             <div class="director-msg-delegated">

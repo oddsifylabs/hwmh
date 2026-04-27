@@ -206,11 +206,24 @@ function loadPersistedState() {
   if (state && state.taskRequests) {
     global.taskRequests = state.taskRequests;
   }
+  if (state && state.taskHistory) {
+    global.taskHistory = state.taskHistory;
+  }
+  if (state && state.sophiaConversation) {
+    global.sophiaConversation = state.sophiaConversation;
+  }
 }
 loadPersistedState();
 
 function persistState() {
-  const state = { queues, workerStatus, taskRequests: global.taskRequests || [], timestamp: new Date().toISOString() };
+  const state = {
+    queues,
+    workerStatus,
+    taskRequests: global.taskRequests || [],
+    taskHistory: global.taskHistory || [],
+    sophiaConversation: global.sophiaConversation || [],
+    timestamp: new Date().toISOString()
+  };
   saveState(state);
 }
 
@@ -425,6 +438,29 @@ app.post('/complete/:workerId', (req, res) => {
   if (!global.taskHistory) global.taskHistory = [];
   global.taskHistory.unshift(historyEntry);
   if (global.taskHistory.length > 500) global.taskHistory.pop();
+
+  // Auto-post completion into Director chat
+  if (!global.sophiaConversation) global.sophiaConversation = [];
+  const workerName = WORKERS[workerId]?.name || workerId;
+  const resultPreview = result
+    ? (typeof result === 'object' ? JSON.stringify(result).slice(0, 200) : String(result).slice(0, 200))
+    : '(no output)';
+
+  global.sophiaConversation.push({
+    id: require('uuid').v4(),
+    sender: 'sophia',
+    senderName: 'Sophia Hermes',
+    text: success
+      ? `✅ **${workerName}** completed task: "${task.description.slice(0, 80)}${task.description.length > 80 ? '...' : ''}"\n\nResult: \`\`\`${resultPreview}\`\`\``
+      : `❌ **${workerName}** failed task: "${task.description.slice(0, 80)}${task.description.length > 80 ? '...' : ''}"\n\nError: ${error || 'Unknown error'}`,
+    type: success ? 'task-complete' : 'task-failed',
+    timestamp: new Date().toISOString(),
+    taskId,
+    workerId
+  });
+  if (global.sophiaConversation.length > 500) {
+    global.sophiaConversation = global.sophiaConversation.slice(-500);
+  }
 
   // Telegram alerts
   if (!success) {
