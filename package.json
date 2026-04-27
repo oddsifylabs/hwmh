@@ -10,7 +10,11 @@
     "lint": "eslint . --max-warnings 0",
     "worker:iris": "node src/workers/iris/iris-worker.js",
     "worker:pheme": "node src/workers/pheme/pheme-worker.js",
-    "worker:kairos": "node src/workers/kairos/kairos-worker.js"
+    "worker:kairos": "node src/workers/kairos/kairos-worker.js",
+    "validate:railway": "node scripts/validate-railway.js",
+    "deploy:worker": "node scripts/deploy-worker.js",
+    "sync:secrets": "node scripts/sync-secrets.js",
+    "setup:1password": "node scripts/setup-1password.js"
   },
   "repository": {
     "type": "git",

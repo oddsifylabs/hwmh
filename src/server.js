@@ -456,9 +456,49 @@ app.get('/api/logs', (req, res) => {
   res.json({ logs: logs.slice(0, 100) });
 });
 
-// Health check for Railway
+// Health check for Railway + comprehensive status
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'hwmh', version: '1.0.1', timestamp: new Date().toISOString() });
+  const now = Date.now();
+  const workerHealth = {};
+  let allWorkersHealthy = true;
+
+  for (const [id, cfg] of Object.entries(WORKERS)) {
+    const s = workerStatus[id] || {};
+    const lastSeen = s.lastSeen ? new Date(s.lastSeen).getTime() : 0;
+    const offlineThreshold = 3 * 60 * 1000; // 3 min
+    const isOffline = id !== 'sophia' && (!lastSeen || (now - lastSeen > offlineThreshold));
+    const healthy = !isOffline;
+    if (!healthy) allWorkersHealthy = false;
+
+    workerHealth[id] = {
+      name: cfg.name,
+      status: s.status || 'unknown',
+      lastSeen: s.lastSeen || null,
+      queueLength: s.queueLength || 0,
+      healthy
+    };
+  }
+
+  const secretHealth = secrets.healthCheck();
+  const memory = process.memoryUsage();
+  const healthy = secretHealth.ok && allWorkersHealthy;
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'healthy' : 'degraded',
+    service: 'hwmh',
+    version: '1.0.1',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    memory: {
+      rss: Math.round(memory.rss / 1024 / 1024) + 'MB',
+      heapUsed: Math.round(memory.heapUsed / 1024 / 1024) + 'MB'
+    },
+    workers: workerHealth,
+    secrets: {
+      ok: secretHealth.ok,
+      onepassword: secretHealth.onepassword
+    }
+  });
 });
 
 // Update Sophia's heartbeat since she runs inside the server

@@ -194,6 +194,33 @@ function alertSystemRestart(uptimeSeconds) {
   );
 }
 
+function alertDeployFailure(serviceName, error) {
+  const key = `deploy:${serviceName}`;
+  if (shouldThrottle(key)) return;
+  sendMessage(
+    `❌ *Deploy Failed*\n\n` +
+    `*Service:* ${serviceName}\n` +
+    `*Error:* ${error || 'Unknown error'}\n\n` +
+    `[Check Dashboard](${HWMH_BASE_URL})`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
+function alertHealthCheckFailure(checks) {
+  const key = 'health:degraded';
+  if (shouldThrottle(key)) return;
+  const failed = Object.entries(checks)
+    .filter(([, v]) => !v.healthy)
+    .map(([k, v]) => `${k}: ${v.status || 'unhealthy'}`)
+    .join('\n');
+  sendMessage(
+    `⚠️ *Health Check Degraded*\n\n` +
+    `*Failed checks:*\n${failed}\n\n` +
+    `[Check Dashboard](${HWMH_BASE_URL})`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
 // ============================================
 // OFFLINE MONITOR
 // ============================================
@@ -258,6 +285,8 @@ module.exports = {
   alertQueueBackup,
   alertErrorSpike,
   alertSystemRestart,
+  alertDeployFailure,
+  alertHealthCheckFailure,
   startOfflineMonitor,
   recordError,
   fetchStatusSnapshot
