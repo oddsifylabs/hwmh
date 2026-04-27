@@ -295,7 +295,22 @@
     </div>
   </footer>
 
+  <!-- Task Detail Modal -->
+  <div id="task-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;padding:24px">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-width:640px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 48px rgba(0,0,0,0.5)">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:18px">Task Details</h3>
+        <button onclick="closeTaskModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
+      </div>
+      <div id="task-modal-body" style="padding:24px;overflow-y:auto;flex:1;font-size:14px;line-height:1.6">
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-secondary" onclick="closeTaskModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/icons.js?v=6"></script>
-  <script src="/js/dashboard.js?v=9"></script>
+  <script src="/js/dashboard.js?v=10"></script>
 </body>
 </html>

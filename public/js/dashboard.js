@@ -492,7 +492,7 @@ function renderTasks(tasks) {
       <td><span class="badge badge-${t.status === 'completed' ? 'success' : t.status === 'failed' ? 'danger' : t.status === 'active' ? 'info' : 'warning'}">${t.status}</span></td>
       <td>${escapeHtml(t.description || '')}</td>
       <td>${t.timestamp ? timeAgo(t.timestamp) : '—'}</td>
-      <td><button class="btn btn-sm btn-secondary" onclick="viewTask('${t.id}')">View</button></td>
+      <td><button class="btn btn-sm btn-primary" onclick="viewTask('${t.id}', '${t.workerId}')">View</button></td>
     </tr>
   `).join('');
 
@@ -501,9 +501,80 @@ function renderTasks(tasks) {
 
 function renderTasksFiltered() { loadTasks(); }
 
-function viewTask(id) {
-  toast('Task detail view coming soon — ID: ' + id.slice(0,8), 'info');
+async function viewTask(taskId, workerId) {
+  try {
+    // Fetch full history to find this task
+    const data = await get(API.history + '?limit=500');
+    const history = data.history || [];
+    const task = history.find(t => t.id === taskId);
+
+    if (!task) {
+      toast('Task not found — it may have been cleared', 'error');
+      return;
+    }
+
+    const meta = WORKER_META[task.workerId] || { name: task.workerId, color: '#94a3b8' };
+    const resultStr = task.result
+      ? (typeof task.result === 'object' ? JSON.stringify(task.result, null, 2) : String(task.result))
+      : null;
+    const errorStr = task.error ? String(task.error) : null;
+
+    const modalBody = document.getElementById('task-modal-body');
+    modalBody.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Worker</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="worker-status-badge badge-success" style="background:${meta.color};color:#fff;border:none">${meta.name}</span>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Status</div>
+        <span class="badge badge-${task.status === 'completed' ? 'success' : task.status === 'failed' ? 'danger' : 'warning'}">${task.status}</span>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Task ID</div>
+        <code style="font-size:12px">${task.id}</code>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Description</div>
+        <div style="background:var(--bg-elevated);padding:12px;border-radius:8px;border:1px solid var(--border)">${escapeHtml(task.description || '(no description)')}</div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Timeline</div>
+        <div style="font-size:13px;color:var(--text-muted)">
+          ${task.startedAt ? `<div>Started: ${new Date(task.startedAt).toLocaleString()}</div>` : ''}
+          ${task.timestamp ? `<div>Completed: ${new Date(task.timestamp).toLocaleString()}</div>` : ''}
+        </div>
+      </div>
+      ${resultStr ? `
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Result</div>
+        <pre style="background:var(--bg-elevated);padding:12px;border-radius:8px;border:1px solid var(--border);margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px;max-height:300px;overflow:auto">${escapeHtml(resultStr)}</pre>
+      </div>
+      ` : ''}
+      ${errorStr ? `
+      <div style="margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Error</div>
+        <pre style="background:rgba(239,68,68,0.1);padding:12px;border-radius:8px;border:1px solid var(--danger);margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--danger)">${escapeHtml(errorStr)}</pre>
+      </div>
+      ` : ''}
+    `;
+
+    document.getElementById('task-modal').style.display = 'flex';
+  } catch (err) {
+    toast('Failed to load task: ' + err.message, 'error');
+  }
 }
+
+function closeTaskModal() {
+  document.getElementById('task-modal').style.display = 'none';
+}
+
+// Close modal on backdrop click
+document.addEventListener('click', (e) => {
+  const modal = document.getElementById('task-modal');
+  if (modal && e.target === modal) closeTaskModal();
+});
 
 /* ---------- Request Form (now in Director tab) ---------- */
 const REQUEST_TEMPLATES = {
