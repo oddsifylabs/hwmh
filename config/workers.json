@@ -1,6 +1,6 @@
 {
   "$schema": "./workers.schema.json",
-  "_comment": "HWMH Default Worker Roster: Sophia (Manager) + Iris + Pheme + Kairos",
+  "_comment": "HWMH Worker Roster: Sophia (Manager) + 8 Workers = 9 total",
   "sophia": {
     "name": "Sophia Hermes",
     "type": "director-facing",
@@ -38,6 +38,56 @@
     "capabilities": ["lead-generation", "sales", "marketing", "crm", "analytics", "content-strategy"],
     "role": "sales-marketing",
     "description": "Sales & Marketing. Generates leads, manages outreach, tracks pipeline.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  },
+  "miah": {
+    "name": "Miah Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["write-code", "deploy", "debug", "code-review", "automation"],
+    "role": "software-coder",
+    "description": "Software Coder. Writes code, deploys apps, debugs, reviews code, runs automations.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  },
+  "markus": {
+    "name": "Markus Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["post-x", "engagement", "analytics", "schedule", "content-strategy", "curate-content"],
+    "role": "social-media-manager",
+    "description": "Social Media Manager. Posts to X, manages engagement, tracks analytics, curates content.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  },
+  "mitch": {
+    "name": "Mitch Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["lead-generation", "sales", "marketing", "crm"],
+    "role": "sales-marketing",
+    "description": "Sales & Marketing Manager. Generates leads, manages sales, runs campaigns, tracks CRM.",
+    "reportsTo": "sophia",
+    "riskTier": 2
+  },
+  "nova": {
+    "name": "Nova Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["writing", "research", "summarization", "editing", "admin"],
+    "role": "writer-researcher",
+    "description": "Writer / Admin / Researcher. Creates content, researches topics, summarizes, edits, handles admin.",
+    "reportsTo": "sophia",
+    "riskTier": 1
+  },
+  "ruth": {
+    "name": "Ruth Hermes",
+    "type": "local",
+    "transport": "poll",
+    "capabilities": ["web-development", "frontend", "backend", "ui-ux", "deployment", "maintenance"],
+    "role": "web-developer",
+    "description": "Web Developer. Builds frontend, backend, UI/UX, deploys, maintains sites and apps.",
     "reportsTo": "sophia",
     "riskTier": 2
   }
