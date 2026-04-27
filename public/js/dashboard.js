@@ -1,5 +1,5 @@
 /* ============================================================
-   HWMH Dashboard JS
+   HWMH Dashboard JS v2
    Hermes Workers Management Hub — Oddsify Labs
    ============================================================ */
 
@@ -7,6 +7,7 @@ const API = {
   status:    '/status',
   workers:   '/workers',
   tasks:     '/api/tasks',
+  requests:  '/api/requests',
   command:   '/command',
   reasoning: '/api/reasoning',
   decisions: '/api/decisions',
@@ -14,6 +15,9 @@ const API = {
   history:   '/api/history',
   system:    '/api/system',
   config:    '/api/config',
+  profile:   (id) => `/api/workers/${id}/profile`,
+  sophiaMsg: '/api/sophia/message',
+  sophiaConv:'/api/sophia/conversation',
   clear:     (id) => `/api/workers/${id}/clear`,
   reset:     (id) => `/api/workers/${id}/reset`,
 };
@@ -22,6 +26,9 @@ let currentTab = 'dashboard';
 let chatMessages = [];
 let chatUnread = 0;
 let chatPollInterval = null;
+let directorUnread = 0;
+let directorPollInterval = null;
+let workersData = null;
 
 /* ---------- Tabs ---------- */
 function switchTab(tab) {
@@ -39,6 +46,10 @@ function switchTab(tab) {
     chatUnread = 0;
     updateChatBadge();
   }
+  if (tab === 'director') {
+    directorUnread = 0;
+    updateDirectorBadge();
+  }
 
   // Auto-load tab content
   if (tab === 'workers') loadWorkersDetail();
@@ -49,6 +60,9 @@ function switchTab(tab) {
   if (tab === 'errors')  loadErrors();
   if (tab === 'system')  loadSystem();
   if (tab === 'config')  loadConfig();
+  if (tab === 'request') loadRequests();
+  if (tab === 'profiles') loadProfiles();
+  if (tab === 'director') loadDirectorChat();
 }
 
 /* ---------- Fetch helpers ---------- */
@@ -72,10 +86,12 @@ async function post(url, body = {}) {
 async function refreshAll(force = false) {
   try {
     const data = await get(API.workers);
+    workersData = data;
     renderWorkers(data.workers, data.status, data.queues);
     renderMetrics(data.status, data.queues);
     if (currentTab === 'tasks') loadTasks();
     if (currentTab === 'system') loadSystem();
+    if (currentTab === 'profiles') loadProfiles();
   } catch (err) {
     console.error('Refresh failed:', err);
     toast('Refresh failed: ' + err.message, 'error');
@@ -97,7 +113,6 @@ function renderMetrics(status, queues) {
   document.getElementById('metric-queue').textContent     = queueDepth;
   document.getElementById('badge-queue').textContent      = queueDepth;
 
-  // Completed today — approximate from history if available
   const completedToday = (global.taskHistory || []).filter(t => {
     const d = new Date(t.timestamp);
     const now = new Date();
@@ -127,9 +142,10 @@ function renderWorkers(workers, status, queues) {
     const statusLabel = st.status || 'idle';
     const lastSeen = st.lastSeen ? timeAgo(st.lastSeen) : 'Never';
     const qlen = queues[id] || 0;
+    const caps = (info.capabilities || []).slice(0, 4).map(c => `<span class="cap-chip">${c}</span>`).join('');
 
     return `
-      <div class="worker-card ${isOnline ? 'online' : 'offline'}">
+      <div class="worker-card ${isOnline ? 'online' : 'offline'}" onclick="openProfile('${id}')">
         <div class="worker-header">
           <div class="worker-avatar" style="background:${meta.color}">${meta.icon}</div>
           <div class="worker-info">
@@ -143,9 +159,11 @@ function renderWorkers(workers, status, queues) {
           <div><strong>Queue:</strong> ${qlen}</div>
           <div><strong>Last seen:</strong> ${lastSeen}</div>
         </div>
+        <div class="worker-capabilities">${caps}</div>
         <div class="worker-actions">
-          <button class="btn btn-sm btn-secondary" onclick="clearQueue('${id}')">Clear Queue</button>
-          <button class="btn btn-sm btn-secondary" onclick="resetWorker('${id}')">Reset</button>
+          <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();clearQueue('${id}')">Clear Queue</button>
+          <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();resetWorker('${id}')">Reset</button>
+          <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openProfile('${id}')">Profile</button>
         </div>
       </div>
     `;
@@ -183,6 +201,185 @@ async function clearAllQueues() {
   }
   toast('All queues cleared', 'success');
   refreshAll();
+}
+
+/* ---------- Profiles ---------- */
+async function loadProfiles() {
+  try {
+    const data = workersData || await get(API.workers);
+    renderProfiles(data.workers, data.status);
+  } catch (err) {
+    console.error('Profiles load failed:', err);
+  }
+}
+
+function renderProfiles(workers, status) {
+  const grid = document.getElementById('profile-grid');
+  if (!grid) return;
+
+  grid.innerHTML = Object.entries(workers).map(([id, info]) => {
+    const meta = WORKER_META[id] || { icon: '🤖', color: '#94a3b8' };
+    const st = status[id] || {};
+    const isOnline = st.status !== 'offline';
+    return `
+      <div class="profile-card" onclick="openProfile('${id}')">
+        <div class="profile-card-header">
+          <div class="profile-avatar" style="background:${meta.color}">${meta.icon}</div>
+          <div class="profile-info">
+            <div class="profile-name">${info.name}</div>
+            <div class="profile-role">${info.role || ''}</div>
+          </div>
+          <span class="worker-status-badge ${isOnline ? 'badge-success' : 'badge-danger'}">${isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+        <div class="worker-capabilities">
+          ${(info.capabilities || []).slice(0, 5).map(c => `<span class="cap-chip">${c}</span>`).join('')}
+        </div>
+        <div class="profile-stats">
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="stat-${id}-total">-</div>
+            <div class="profile-stat-label">Tasks</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="stat-${id}-rate">-</div>
+            <div class="profile-stat-label">Success</div>
+          </div>
+          <div class="profile-stat">
+            <div class="profile-stat-value" id="stat-${id}-queue">${st.queueLength || 0}</div>
+            <div class="profile-stat-label">Queue</div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-primary profile-view-btn" onclick="event.stopPropagation();openProfile('${id}')">View Profile</button>
+      </div>
+    `;
+  }).join('');
+
+  // Load stats in background
+  Object.keys(workers).forEach(id => loadProfileStats(id));
+}
+
+async function loadProfileStats(workerId) {
+  try {
+    const data = await get(API.profile(workerId));
+    const totalEl = document.getElementById(`stat-${workerId}-total`);
+    const rateEl = document.getElementById(`stat-${workerId}-rate`);
+    if (totalEl) totalEl.textContent = data.stats.totalTasks;
+    if (rateEl) rateEl.textContent = data.stats.successRate + '%';
+  } catch (err) {
+    console.error('Profile stats failed:', err);
+  }
+}
+
+async function openProfile(workerId) {
+  try {
+    const data = await get(API.profile(workerId));
+    renderProfileDetail(data);
+    switchTab('profile-detail');
+  } catch (err) {
+    toast('Failed to load profile: ' + err.message, 'error');
+  }
+}
+
+function renderProfileDetail(data) {
+  const meta = WORKER_META[data.workerId] || { icon: '🤖', color: '#94a3b8' };
+  const title = document.getElementById('profile-detail-title');
+  if (title) title.textContent = `${data.name} — Profile`;
+
+  const content = document.getElementById('profile-detail-content');
+  if (!content) return;
+
+  const st = data.status || {};
+  const isOnline = st.status !== 'offline';
+
+  content.innerHTML = `
+    <div class="profile-detail-header">
+      <div class="profile-detail-avatar" style="background:${meta.color}">${meta.icon}</div>
+      <div class="profile-detail-info">
+        <h3>${data.name}</h3>
+        <div class="role">${data.role || ''} — ${data.description || ''}</div>
+        <div style="margin-top:8px">
+          <span class="worker-status-badge ${isOnline ? 'badge-success' : 'badge-danger'}">${isOnline ? 'Online' : 'Offline'}</span>
+          <span class="badge badge-info">Risk Tier ${data.riskTier}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-detail-grid">
+      <div class="profile-detail-stat">
+        <div class="value" style="color:var(--text)">${data.stats.totalTasks}</div>
+        <div class="label">Total Tasks</div>
+      </div>
+      <div class="profile-detail-stat">
+        <div class="value" style="color:var(--success)">${data.stats.completed}</div>
+        <div class="label">Completed</div>
+      </div>
+      <div class="profile-detail-stat">
+        <div class="value" style="color:var(--danger)">${data.stats.failed}</div>
+        <div class="label">Failed</div>
+      </div>
+      <div class="profile-detail-stat">
+        <div class="value" style="color:var(--info)">${data.stats.successRate}%</div>
+        <div class="label">Success Rate</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="profile-section">
+        <h4>Capabilities</h4>
+        <div class="worker-capabilities">
+          ${data.capabilities.map(c => `<span class="cap-chip">${c}</span>`).join('')}
+        </div>
+      </div>
+      <div class="profile-section">
+        <h4>Current Status</h4>
+        <div style="font-size:13px;color:var(--text-muted)">
+          <div>Status: <strong>${st.status || 'unknown'}</strong></div>
+          <div>Queue: <strong>${data.stats.queueLength}</strong></div>
+          <div>Last seen: <strong>${st.lastSeen ? timeAgo(st.lastSeen) : 'Never'}</strong></div>
+          ${st.currentTask ? `<div>Current task: <code>${st.currentTask.slice(0,8)}</code></div>` : ''}
+        </div>
+      </div>
+    </div>
+
+    ${data.recentOutputs.length ? `
+    <div class="profile-section">
+      <h4>Recent Outputs</h4>
+      <div class="chat-list" style="max-height: 400px;">
+        ${data.recentOutputs.map(o => `
+          <div class="chat-bubble">
+            <div class="chat-body">
+              <div class="chat-meta">
+                <code>${o.taskId.slice(0,8)}</code>
+                <span class="chat-time">${timeAgo(o.completedAt)}</span>
+                ${o.duration ? `<span class="badge badge-info">${o.duration}s</span>` : ''}
+              </div>
+              <div class="chat-text">${escapeHtml(o.description || '')}</div>
+              ${o.result ? `<div class="chat-result">${escapeHtml(String(o.result))}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : '<div class="empty-state"><div class="empty-state-icon">📤</div><div class="empty-state-text">No outputs yet. Tasks will appear here once completed.</div></div>'}
+
+    ${data.timeline.length ? `
+    <div class="profile-section">
+      <h4>Activity Timeline</h4>
+      <div class="card">
+        ${data.timeline.map(t => `
+          <div class="timeline-item">
+            <div class="timeline-dot ${t.status}"></div>
+            <div class="timeline-content">
+              <div class="timeline-time">${timeAgo(t.timestamp)}</div>
+              <div class="timeline-desc">${escapeHtml(t.description || '')}</div>
+              ${t.result ? `<div class="timeline-result">${escapeHtml(t.result)}</div>` : ''}
+              ${t.error ? `<div class="timeline-error">${escapeHtml(t.error)}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
+  `;
 }
 
 /* ---------- Tasks ---------- */
@@ -228,13 +425,218 @@ function viewTask(id) {
   toast('Task detail view coming soon — ID: ' + id.slice(0,8), 'info');
 }
 
+/* ---------- Request Form ---------- */
+const REQUEST_TEMPLATES = {
+  research: {
+    title: 'Research: ',
+    description: 'Please research the following topic and provide a detailed summary with sources:\n\n[TOPIC]',
+    category: 'research',
+    worker: 'auto'
+  },
+  content: {
+    title: 'Write: ',
+    description: 'Please write the following content:\n\n[CONTENT TYPE]\n\nTarget audience: [AUDIENCE]\nTone: [TONE]\nKey points to cover:\n- \n- \n- ',
+    category: 'content',
+    worker: 'auto'
+  },
+  social: {
+    title: 'Social Post: ',
+    description: 'Create a social media post for the following:\n\nPlatform: [X/Twitter/LinkedIn/etc]\nTopic: [TOPIC]\nTone: [TONE]\nInclude hashtags: yes/no',
+    category: 'social',
+    worker: 'pheme'
+  },
+  code: {
+    title: 'Code Task: ',
+    description: 'Please complete the following coding task:\n\nLanguage/Framework: [LANGUAGE]\nTask: [DESCRIPTION]\nRequirements:\n- \n- \n- ',
+    category: 'development',
+    worker: 'auto'
+  },
+  email: {
+    title: 'Draft Email: ',
+    description: 'Draft an email with the following details:\n\nRecipient: [NAME/ROLE]\nSubject: [SUBJECT]\nPurpose: [PURPOSE]\nKey points to include:\n- \n- ',
+    category: 'admin',
+    worker: 'iris'
+  },
+  meeting: {
+    title: 'Schedule: ',
+    description: 'Please schedule the following:\n\nEvent: [EVENT NAME]\nAttendees: [NAMES]\nPreferred times: [TIMES]\nDuration: [DURATION]\nNotes: [ANY SPECIAL REQUIREMENTS]',
+    category: 'admin',
+    worker: 'iris'
+  }
+};
+
+function fillTemplate(type) {
+  const tpl = REQUEST_TEMPLATES[type];
+  if (!tpl) return;
+  document.getElementById('req-title').value = tpl.title;
+  document.getElementById('req-description').value = tpl.description;
+  document.getElementById('req-category').value = tpl.category;
+  document.getElementById('req-worker').value = tpl.worker;
+}
+
+function clearRequestForm() {
+  document.getElementById('req-title').value = '';
+  document.getElementById('req-description').value = '';
+  document.getElementById('req-category').value = 'general';
+  document.getElementById('req-worker').value = 'auto';
+  document.getElementById('req-priority').value = 'normal';
+  document.getElementById('req-tags').value = '';
+}
+
+async function submitRequest() {
+  const title = document.getElementById('req-title').value.trim();
+  const description = document.getElementById('req-description').value.trim();
+  const worker = document.getElementById('req-worker').value;
+  const priority = document.getElementById('req-priority').value;
+  const category = document.getElementById('req-category').value;
+  const tagsRaw = document.getElementById('req-tags').value;
+  const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+
+  if (!title || !description) {
+    toast('Title and description are required', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('req-submit');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    const res = await post(API.requests, { title, description, worker, priority, category, tags });
+    toast(`Request submitted: ${res.request.title.slice(0, 40)}`, 'success');
+    clearRequestForm();
+    loadRequests();
+  } catch (err) {
+    toast('Submit failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Submit Request';
+  }
+}
+
+async function loadRequests() {
+  try {
+    const data = await get(API.requests);
+    renderRequests(data.requests || []);
+  } catch (err) {
+    console.error('Requests load failed:', err);
+  }
+}
+
+function renderRequests(requests) {
+  const tbody = document.getElementById('requests-table-body');
+  if (!tbody) return;
+
+  if (!requests.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No requests yet. Create one above!</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = requests.map(r => `
+    <tr>
+      <td><strong>${escapeHtml(r.title)}</strong></td>
+      <td>${r.worker === 'auto' ? '🤖 Auto' : WORKER_META[r.worker]?.icon + ' ' + r.worker}</td>
+      <td><span class="badge badge-${r.priority === 'urgent' ? 'danger' : r.priority === 'high' ? 'warning' : r.priority === 'low' ? 'info' : 'success'}">${r.priority}</span></td>
+      <td><span class="badge badge-${r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : r.status === 'queued' ? 'info' : 'warning'}">${r.status}</span></td>
+      <td>${timeAgo(r.createdAt)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ---------- Director Chat ---------- */
+async function loadDirectorChat() {
+  try {
+    const data = await get(API.sophiaConv);
+    renderDirectorMessages(data.conversation || [], data.directorName || 'Director');
+  } catch (err) {
+    console.error('Director chat load failed:', err);
+  }
+}
+
+function renderDirectorMessages(messages, directorName) {
+  const container = document.getElementById('director-chat-messages');
+  if (!container) return;
+
+  if (!messages.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">👑</div>
+        <div class="empty-state-text">Welcome, ${directorName}. Send a message to Sophia to get started.</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = messages.map(m => {
+    const isDirector = m.sender === 'director';
+    const avatar = isDirector ? '👤' : '👑';
+    const color = isDirector ? '#6366f1' : '#f59e0b';
+    const name = isDirector ? directorName : 'Sophia Hermes';
+
+    return `
+      <div class="director-msg ${m.sender}">
+        <div class="director-msg-avatar" style="background:${color}">${avatar}</div>
+        <div class="director-msg-body">
+          <div class="director-msg-name">${name}</div>
+          <div class="director-msg-text">${escapeHtml(m.text || '')}</div>
+          <div class="director-msg-time">${new Date(m.timestamp).toLocaleString()}</div>
+          ${m.delegated && m.delegated.length ? `
+            <div class="director-msg-delegated">
+              Delegated to: ${m.delegated.map(d => d.workerId).join(', ')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendDirectorMessage() {
+  const input = document.getElementById('director-input');
+  const btn = document.getElementById('director-send-btn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    const res = await post(API.sophiaMsg, { message: text, type: 'chat' });
+    input.value = '';
+    renderDirectorMessages(
+      [...(res.userMsg ? [res.userMsg] : []), ...(res.sophiaReply ? [res.sophiaReply] : [])],
+      res.userMsg?.senderName || 'Director'
+    );
+    // Refresh full conversation
+    setTimeout(loadDirectorChat, 300);
+  } catch (err) {
+    toast('Message failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send';
+  }
+}
+
+function sendDirectorQuick(text) {
+  document.getElementById('director-input').value = text;
+  sendDirectorMessage();
+}
+
+function updateDirectorBadge() {
+  const badge = document.getElementById('badge-director-nav');
+  if (!badge) return;
+  badge.textContent = directorUnread;
+  badge.style.display = directorUnread > 0 ? 'inline-flex' : 'none';
+}
+
 /* ---------- Chat / History ---------- */
 async function loadChat() {
   try {
     const data = await get(API.history);
     const history = data.history || [];
 
-    // Track unread
     if (currentTab !== 'chat' && history.length > chatMessages.length) {
       chatUnread += history.length - chatMessages.length;
       updateChatBadge();
@@ -283,7 +685,6 @@ function renderChat(messages) {
     `;
   }).join('');
 
-  // Auto-scroll to bottom
   list.scrollTop = list.scrollHeight;
 }
 
@@ -405,7 +806,6 @@ async function sendCommand() {
     const res = await post(API.command, { command: text, source: 'dashboard' });
     toast('Command sent: ' + res.parsed?.description?.slice(0, 60), 'success');
     input.value = '';
-    // Refresh relevant tabs
     setTimeout(() => {
       refreshAll();
       if (currentTab === 'chat') loadChat();

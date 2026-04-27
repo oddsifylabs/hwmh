@@ -24,9 +24,16 @@
       <a class="nav-item active" data-tab="dashboard" href="#" onclick="switchTab('dashboard');return false">
         <span class="nav-icon">&#127968;</span> Dashboard
       </a>
+      <a class="nav-item" data-tab="request" href="#" onclick="switchTab('request');return false">
+        <span class="nav-icon">&#9997;&#65039;</span> New Request
+        <span class="nav-badge badge-info" id="badge-request-nav">New</span>
+      </a>
       <a class="nav-item" data-tab="workers" href="#" onclick="switchTab('workers');return false">
         <span class="nav-icon">&#128104;&#8205;&#128187;</span> Workers
         <span class="nav-badge" id="badge-workers-nav">4</span>
+      </a>
+      <a class="nav-item" data-tab="profiles" href="#" onclick="switchTab('profiles');return false">
+        <span class="nav-icon">&#128100;</span> Profiles
       </a>
       <a class="nav-item" data-tab="tasks" href="#" onclick="switchTab('tasks');return false">
         <span class="nav-icon">&#128203;</span> Tasks
@@ -34,6 +41,10 @@
       </a>
 
       <div class="nav-section">Intelligence</div>
+      <a class="nav-item" data-tab="director" href="#" onclick="switchTab('director');return false">
+        <span class="nav-icon">&#128081;</span> Director
+        <span class="nav-badge badge-info" id="badge-director-nav">0</span>
+      </a>
       <a class="nav-item" data-tab="reasoning" href="#" onclick="switchTab('reasoning');return false">
         <span class="nav-icon">&#129504;</span> Reasoning
       </a>
@@ -45,7 +56,7 @@
         <span class="nav-badge badge-danger" id="badge-errors-nav">0</span>
       </a>
       <a class="nav-item" data-tab="chat" href="#" onclick="switchTab('chat');return false">
-        <span class="nav-icon">&#128172;</span> Chat
+        <span class="nav-icon">&#128172;</span> Worker Chat
         <span class="nav-badge badge-info" id="badge-chat-nav">0</span>
       </a>
 
@@ -98,7 +109,7 @@
 
         <div class="grid grid-2">
           <div class="command-panel card">
-            <h3>&#9997;&#65039; Send Command</h3>
+            <h3>&#9997;&#65039; Quick Command</h3>
             <div class="command-input-wrap">
               <input type="text" id="command-input" placeholder="@sophia Research competitors for Oddsify Labs..." onkeydown="if(event.key==='Enter')sendCommand()">
               <button id="cmd-btn" class="btn btn-primary" onclick="sendCommand()">Send</button>
@@ -111,8 +122,8 @@
           <div class="card">
             <h3>&#128736;&#65039; Quick Actions</h3>
             <div class="quick-actions">
+              <button class="btn btn-secondary" onclick="switchTab('request')">&#9997;&#65039; New Request</button>
               <button class="btn btn-secondary" onclick="clearAllQueues()">&#128465;&#65039; Clear All Queues</button>
-              <button class="btn btn-secondary" onclick="refreshAll(true)">&#128260; Force Refresh</button>
               <button class="btn btn-secondary" onclick="switchTab('system')">&#128202; View System</button>
             </div>
           </div>
@@ -127,10 +138,113 @@
         </div>
       </div>
 
+      <!-- ============ NEW REQUEST TAB ============ -->
+      <div id="tab-request" class="tab-panel">
+        <div class="header"><h2>&#9997;&#65039; New Request</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="switchTab('tasks')">View Tasks</button></div></div>
+        <div class="info-banner">Submit a structured task request. Sophia will route it to the best worker, or you can assign directly.</div>
+
+        <div class="request-form card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Title</label>
+              <input type="text" id="req-title" placeholder="e.g., Research competitor pricing">
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select id="req-category">
+                <option value="general">General</option>
+                <option value="research">Research</option>
+                <option value="content">Content</option>
+                <option value="development">Development</option>
+                <option value="social">Social Media</option>
+                <option value="sales">Sales / Marketing</option>
+                <option value="admin">Admin</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Assign To</label>
+              <select id="req-worker">
+                <option value="auto">&#129302; Auto (Sophia decides)</option>
+                <option value="iris">&#128221; Iris — Admin & Research</option>
+                <option value="pheme">&#128227; Pheme — Social Media</option>
+                <option value="kairos">&#127919; Kairos — Sales & Marketing</option>
+                <option value="sophia">&#128081; Sophia — Manager</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select id="req-priority">
+                <option value="low">&#128309; Low</option>
+                <option value="normal" selected>&#128993; Normal</option>
+                <option value="high">&#128992; High</option>
+                <option value="urgent">&#128308; Urgent</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="req-description" rows="5" placeholder="Describe what needs to be done in detail..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Tags (comma-separated)</label>
+            <input type="text" id="req-tags" placeholder="e.g., website, competitors, q2-2026">
+          </div>
+
+          <div class="request-templates">
+            <label>Quick Templates:</label>
+            <div class="template-chips">
+              <button class="chip" onclick="fillTemplate('research')">&#128270; Research</button>
+              <button class="chip" onclick="fillTemplate('content')">&#9999;&#65039; Write Content</button>
+              <button class="chip" onclick="fillTemplate('social')">&#128227; Social Post</button>
+              <button class="chip" onclick="fillTemplate('code')">&#128187; Code Task</button>
+              <button class="chip" onclick="fillTemplate('email')">&#9993;&#65039; Draft Email</button>
+              <button class="chip" onclick="fillTemplate('meeting')">&#128197; Schedule Meeting</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">&#128640; Submit Request</button>
+            <button class="btn btn-secondary" onclick="clearRequestForm()">&#10060; Clear</button>
+          </div>
+        </div>
+
+        <h3 class="section-title">&#128203; Recent Requests</h3>
+        <div class="table-wrap">
+          <table class="data-table" id="requests-table">
+            <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
+            <tbody id="requests-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- ============ WORKERS TAB ============ -->
       <div id="tab-workers" class="tab-panel">
         <div class="header"><h2>Workers</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">&#128260; Refresh</button></div></div>
         <div class="worker-grid" id="worker-grid-detail"></div>
+      </div>
+
+      <!-- ============ PROFILES TAB ============ -->
+      <div id="tab-profiles" class="tab-panel">
+        <div class="header"><h2>&#128100; Worker Profiles</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadProfiles()">&#128260; Refresh</button></div></div>
+        <div class="info-banner">Click a worker card to view their full profile, stats, and output history.</div>
+        <div class="profile-grid" id="profile-grid"></div>
+      </div>
+
+      <!-- ============ PROFILE DETAIL (inline modal) ============ -->
+      <div id="tab-profile-detail" class="tab-panel">
+        <div class="header">
+          <h2 id="profile-detail-title">Worker Profile</h2>
+          <div class="header-actions">
+            <button class="btn btn-sm btn-secondary" onclick="switchTab('profiles')">&#8592; Back to Profiles</button>
+          </div>
+        </div>
+        <div id="profile-detail-content"></div>
       </div>
 
       <!-- ============ TASKS TAB ============ -->
@@ -159,6 +273,34 @@
             <thead><tr><th>ID</th><th>Worker</th><th>Status</th><th>Description</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody id="task-table-full-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ============ DIRECTOR TAB (Sophia Chat) ============ -->
+      <div id="tab-director" class="tab-panel">
+        <div class="header">
+          <h2>&#128081; Director ↔ Sophia</h2>
+          <div class="header-actions">
+            <button class="btn btn-sm btn-secondary" onclick="loadDirectorChat()">&#128260; Refresh</button>
+          </div>
+        </div>
+        <div class="info-banner">Direct communication channel with Sophia Hermes, your Manager Agent. All messages are logged and tasks are auto-delegated.</div>
+
+        <div class="director-chat-container">
+          <div class="director-chat-messages" id="director-chat-messages"></div>
+          <div class="director-chat-input">
+            <div class="director-quick-actions">
+              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">&#128202; Status Report</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">&#129302; Auto Delegate</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">&#128203; Review Queues</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">&#128197; Daily Summary</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">&#9888;&#65039; Check Errors</button>
+            </div>
+            <div class="director-input-row">
+              <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
+              <button class="btn btn-primary" id="director-send-btn" onclick="sendDirectorMessage()">Send</button>
+            </div>
+          </div>
         </div>
       </div>
 

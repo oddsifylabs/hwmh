@@ -607,6 +607,214 @@ app.get('/api/errors', (req, res) => {
 });
 
 // ============================================
+// NEW FEATURES: Requests, Profiles, Director Chat
+// ============================================
+
+// Structured task requests storage
+if (!global.taskRequests) global.taskRequests = [];
+if (!global.sophiaConversation) global.sophiaConversation = [];
+
+// POST /api/requests — Create a structured task request
+app.post('/api/requests', async (req, res) => {
+  const { title, description, worker = 'auto', priority = 'normal', category = 'general', tags = [] } = req.body;
+  if (!title || !description) {
+    return res.status(400).json({ error: 'Title and description are required' });
+  }
+
+  const requestId = uuidv4();
+  const request = {
+    id: requestId,
+    title: title.trim(),
+    description: description.trim(),
+    worker,
+    priority,
+    category,
+    tags,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    taskId: null
+  };
+
+  global.taskRequests.unshift(request);
+  if (global.taskRequests.length > 500) global.taskRequests.pop();
+
+  // If auto, route through Sophia; otherwise direct to worker
+  const commandText = worker === 'auto'
+    ? `@sophia ${title}: ${description}`
+    : `@${worker} ${title}: ${description}`;
+
+  try {
+    const result = await sophia.receive({
+      id: requestId,
+      description: commandText,
+      source: 'dashboard-request',
+      metadata: { title, priority, category, tags, originalWorker: worker },
+      timestamp: new Date().toISOString()
+    });
+
+    request.status = 'queued';
+    request.taskId = requestId;
+
+    res.json({ success: true, request, result });
+  } catch (err) {
+    request.status = 'failed';
+    request.error = err.message;
+    res.status(500).json({ error: err.message, request });
+  }
+});
+
+// GET /api/requests — List structured task requests
+app.get('/api/requests', (req, res) => {
+  const { status, worker, priority } = req.query;
+  let requests = global.taskRequests || [];
+  if (status) requests = requests.filter(r => r.status === status);
+  if (worker) requests = requests.filter(r => r.worker === worker);
+  if (priority) requests = requests.filter(r => r.priority === priority);
+  res.json({ requests: requests.slice(0, 200) });
+});
+
+// GET /api/workers/:workerId/profile — Worker profile with stats
+app.get('/api/workers/:workerId/profile', (req, res) => {
+  const { workerId } = req.params;
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+
+  const cfg = WORKERS[workerId];
+  const history = (global.taskHistory || []).filter(t => t.workerId === workerId);
+  const completed = history.filter(t => t.status === 'completed');
+  const failed = history.filter(t => t.status === 'failed');
+
+  const total = history.length;
+  const successRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
+
+  // Average completion time
+  const durations = completed
+    .filter(t => t.startedAt && t.timestamp)
+    .map(t => new Date(t.timestamp) - new Date(t.startedAt));
+  const avgDuration = durations.length > 0
+    ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 1000)
+    : 0;
+
+  // Recent outputs (last 20 completed)
+  const recentOutputs = completed
+    .slice(0, 20)
+    .map(t => ({
+      taskId: t.id,
+      description: t.description,
+      result: t.result,
+      completedAt: t.timestamp,
+      duration: t.startedAt ? Math.round((new Date(t.timestamp) - new Date(t.startedAt)) / 1000) : null
+    }));
+
+  // Activity timeline (last 30 events)
+  const timeline = history
+    .slice(0, 30)
+    .map(t => ({
+      taskId: t.id,
+      status: t.status,
+      description: t.description,
+      timestamp: t.timestamp,
+      result: t.result ? String(t.result).slice(0, 200) : null,
+      error: t.error ? String(t.error).slice(0, 200) : null
+    }));
+
+  res.json({
+    workerId,
+    name: cfg.name,
+    role: cfg.role,
+    description: cfg.description,
+    capabilities: cfg.capabilities || [],
+    riskTier: cfg.riskTier,
+    stats: {
+      totalTasks: total,
+      completed: completed.length,
+      failed: failed.length,
+      successRate,
+      avgDurationSeconds: avgDuration,
+      queueLength: queues[workerId]?.length || 0
+    },
+    status: workerStatus[workerId] || {},
+    recentOutputs,
+    timeline
+  });
+});
+
+// POST /api/sophia/message — Director sends message to Sophia
+app.post('/api/sophia/message', async (req, res) => {
+  const { message, type = 'chat' } = req.body;
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const msgId = uuidv4();
+  const directorName = secrets.getSecret('DIRECTOR_NAME') || 'Director';
+
+  const userMsg = {
+    id: msgId,
+    sender: 'director',
+    senderName: directorName,
+    text: message.trim(),
+    type,
+    timestamp: new Date().toISOString()
+  };
+
+  global.sophiaConversation.push(userMsg);
+
+  // Route through Sophia
+  let sophiaReply = null;
+  try {
+    const result = await sophia.receive({
+      id: msgId,
+      description: message.trim(),
+      source: 'director-chat',
+      timestamp: new Date().toISOString()
+    });
+
+    sophiaReply = {
+      id: uuidv4(),
+      sender: 'sophia',
+      senderName: 'Sophia Hermes',
+      text: result?.reply || result?.message || 'Acknowledged. I will handle this.',
+      type: 'response',
+      timestamp: new Date().toISOString(),
+      taskId: msgId,
+      delegated: result?.delegated || []
+    };
+
+    global.sophiaConversation.push(sophiaReply);
+  } catch (err) {
+    sophiaReply = {
+      id: uuidv4(),
+      sender: 'sophia',
+      senderName: 'Sophia Hermes',
+      text: `I encountered an issue: ${err.message}`,
+      type: 'error',
+      timestamp: new Date().toISOString()
+    };
+    global.sophiaConversation.push(sophiaReply);
+  }
+
+  // Trim conversation history
+  if (global.sophiaConversation.length > 500) {
+    global.sophiaConversation = global.sophiaConversation.slice(-500);
+  }
+
+  res.json({ success: true, userMsg, sophiaReply });
+});
+
+// GET /api/sophia/conversation — Get director <-> Sophia chat history
+app.get('/api/sophia/conversation', (req, res) => {
+  const { limit = 100, after } = req.query;
+  let conversation = global.sophiaConversation || [];
+  if (after) {
+    conversation = conversation.filter(m => new Date(m.timestamp) > new Date(after));
+  }
+  res.json({
+    conversation: conversation.slice(-parseInt(limit)),
+    directorName: secrets.getSecret('DIRECTOR_NAME') || 'Director'
+  });
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
