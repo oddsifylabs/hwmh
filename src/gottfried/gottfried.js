@@ -107,9 +107,24 @@ class Gottfried {
       intents.push({ type: 'marketing', confidence: 0.85, worker: 'kairos' });
     }
 
-    // Default to admin if no strong match
+    // Software / development intent — detected but no dedicated worker exists
+    if (/\b(webapp|website|web app|web page|landing page|build app|code|develop|software|program|deploy|api|backend|frontend)\b/.test(description)) {
+      intents.push({ type: 'software-development', confidence: 0.85, worker: null });
+    }
+
+    // Fallback: if NO intents matched at all, mark as unclear
     if (intents.length === 0) {
-      intents.push({ type: 'general-admin', confidence: 0.6, worker: 'iris' });
+      intents.push({ type: 'unclear', confidence: 0.3, worker: null });
+    }
+
+    // If we have a software intent but no dev worker, downgrade confidence
+    // and keep it flagged so Sophia can respond honestly
+    const hasDevIntent = intents.some(i => i.type === 'software-development');
+    const hasRoutable = intents.some(i => i.worker !== null);
+
+    if (hasDevIntent && !hasRoutable) {
+      // Software request with no developer on team — flag for honest response
+      intents.unshift({ type: 'software-development', confidence: 0.5, worker: null, unroutable: true });
     }
 
     // Sort by confidence
@@ -225,6 +240,8 @@ class Gottfried {
       'analytics': 'metrics-report',
       'sales': 'lead-list',
       'marketing': 'campaign-plan',
+      'software-development': 'spec-document',
+      'unclear': 'needs-clarification',
       'general-admin': 'task-completion'
     };
     return map[intentType] || 'generic-output';

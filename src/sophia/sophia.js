@@ -54,8 +54,8 @@ class Sophia {
     // Formulate response to Director
     const response = this.formulateResponse(reasoning);
 
-    // If approved, delegate to workers
-    if (reasoning.confidence > 0.5) {
+    // If approved AND routable, delegate to workers
+    if (reasoning.confidence > 0.5 && reasoning.plan.primaryWorker && !response.unroutable) {
       const delegationResult = await this.delegateToWorkers(reasoning.delegation, command);
       response.delegation = delegationResult;
     }
@@ -83,14 +83,45 @@ class Sophia {
 
     let message = '';
 
+    // Case 1: Software/dev request but no developer on the team
+    if (primaryIntent?.type === 'software-development' && (primaryIntent?.unroutable || primaryWorker === null)) {
+      message = `I see you're asking about building a webapp or software. Right now I don't have a software developer on the team — my available workers are Iris (admin), Pheme (social media), and Kairos (sales). Would you like me to:\n1. Research and document the requirements with Iris, or\n2. Hold this until a developer is added?`;
+      return {
+        from: this.name,
+        to: this.directorName,
+        message,
+        reply: message,
+        confidence: 0.5,
+        suggestedWorker: null,
+        reasoning: reasoning.reasoning,
+        requiresClarification: true,
+        unroutable: true
+      };
+    }
+
+    // Case 2: Unclear / no match
+    if (primaryIntent?.type === 'unclear' || primaryWorker === null) {
+      message = `I want to make sure I handle this correctly. Could you tell me if this is related to: scheduling, research, social media, sales, or something else?`;
+      return {
+        from: this.name,
+        to: this.directorName,
+        message,
+        reply: message,
+        confidence: 0.3,
+        suggestedWorker: null,
+        reasoning: reasoning.reasoning,
+        requiresClarification: true
+      };
+    }
+
+    // Case 3: High confidence — normal delegation
     if (confidence > 0.85) {
       message = `Understood. I'm delegating this to ${workerNames[primaryWorker] || primaryWorker}. Estimated complexity: ${plan.estimatedComplexity} steps.`;
     } else if (confidence >= 0.5) {
       // Medium confidence — still route it, but note the ambiguity
-      const intentList = analysis.intents.map(i => i.type).join(', ');
       message = `Received. This looks like ${primaryIntent.type} to me — I'm routing it to ${workerNames[primaryWorker] || primaryWorker}. If that's not right, let me know and I'll reassign.`;
     } else {
-      // Very low confidence — ask for clarification but still be helpful
+      // Low confidence — ask for clarification
       message = `I want to make sure I handle this correctly. Could you tell me if this is related to: scheduling, research, social media, sales, or something else?`;
     }
 
