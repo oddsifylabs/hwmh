@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWMH — Hermes Workers Management Hub</title>
-  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="stylesheet" href="/css/dashboard.css?v=2">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" href="/favicon.png">
 </head>
@@ -129,19 +129,18 @@
           </div>
         </div>
 
-        <h3 class="section-title">&#128104;&#8205;&#128187; Worker Status</h3>
-        <div class="worker-grid" id="worker-grid"></div>
-
-        <h3 class="section-title">&#128308; Live Activity</h3>
-        <div class="table-wrap">
-          <div class="activity-list" id="activity-list"></div>
+        <h3 class="section-title">Worker Status</h3>
+          <div class="worker-grid" id="worker-grid"></div>
+        </div>
+        <div class="card">
+          <h3 class="section-title">Live Activity</h3>
+          <div class="activity-feed" id="activity-feed"></div>
         </div>
       </div>
 
-      <!-- ============ NEW REQUEST TAB ============ -->
+      <!-- ============ REQUEST TAB ============ -->
       <div id="tab-request" class="tab-panel">
-        <div class="header"><h2>&#9997;&#65039; New Request</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="switchTab('tasks')">View Tasks</button></div></div>
-        <div class="info-banner">Submit a structured task request. Sophia will route it to the best worker, or you can assign directly.</div>
+        <div class="header"><h2>New Request</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="switchTab('tasks')">View Tasks</button></div></div>
 
         <div class="request-form card">
           <div class="form-row">
@@ -199,22 +198,22 @@
           <div class="request-templates">
             <label>Quick Templates:</label>
             <div class="template-chips">
-              <button class="chip" onclick="fillTemplate('research')">&#128270; Research</button>
-              <button class="chip" onclick="fillTemplate('content')">&#9999;&#65039; Write Content</button>
-              <button class="chip" onclick="fillTemplate('social')">&#128227; Social Post</button>
-              <button class="chip" onclick="fillTemplate('code')">&#128187; Code Task</button>
-              <button class="chip" onclick="fillTemplate('email')">&#9993;&#65039; Draft Email</button>
-              <button class="chip" onclick="fillTemplate('meeting')">&#128197; Schedule Meeting</button>
+              <button class="chip" onclick="fillTemplate('research')">Research</button>
+              <button class="chip" onclick="fillTemplate('content')">Write Content</button>
+              <button class="chip" onclick="fillTemplate('social')">Social Post</button>
+              <button class="chip" onclick="fillTemplate('code')">Code Task</button>
+              <button class="chip" onclick="fillTemplate('email')">Draft Email</button>
+              <button class="chip" onclick="fillTemplate('meeting')">Schedule Meeting</button>
             </div>
           </div>
 
           <div class="form-actions">
-            <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">&#128640; Submit Request</button>
-            <button class="btn btn-secondary" onclick="clearRequestForm()">&#10060; Clear</button>
+            <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">Submit Request</button>
+            <button class="btn btn-secondary" onclick="clearRequestForm()">Clear</button>
           </div>
         </div>
 
-        <h3 class="section-title">&#128203; Recent Requests</h3>
+        <h3 class="section-title">Recent Requests</h3>
         <div class="table-wrap">
           <table class="data-table" id="requests-table">
             <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
@@ -225,26 +224,27 @@
 
       <!-- ============ WORKERS TAB ============ -->
       <div id="tab-workers" class="tab-panel">
-        <div class="header"><h2>Workers</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Workers</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">Refresh</button></div></div>
         <div class="worker-grid" id="worker-grid-detail"></div>
       </div>
 
       <!-- ============ PROFILES TAB ============ -->
       <div id="tab-profiles" class="tab-panel">
-        <div class="header"><h2>&#128100; Worker Profiles</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadProfiles()">&#128260; Refresh</button></div></div>
-        <div class="info-banner">Click a worker card to view their full profile, stats, and output history.</div>
+        <div class="header"><h2>Worker Profiles</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadProfiles()">Refresh</button></div></div>
         <div class="profile-grid" id="profile-grid"></div>
       </div>
 
-      <!-- ============ PROFILE DETAIL (inline modal) ============ -->
+      <!-- ============ PROFILE DETAIL ============ -->
       <div id="tab-profile-detail" class="tab-panel">
-        <div class="header">
-          <h2 id="profile-detail-title">Worker Profile</h2>
-          <div class="header-actions">
-            <button class="btn btn-sm btn-secondary" onclick="switchTab('profiles')">&#8592; Back to Profiles</button>
+        <div class="profile-detail-view">
+          <div class="header">
+            <h2 id="profile-detail-title">Worker Profile</h2>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-secondary" onclick="switchTab('profiles')">Back to Profiles</button>
+            </div>
           </div>
+          <div id="profile-detail-content"></div>
         </div>
-        <div id="profile-detail-content"></div>
       </div>
 
       <!-- ============ TASKS TAB ============ -->
@@ -362,7 +362,7 @@
         <strong>HWMH</strong> — Hermes Workers Management Hub
       </div>
       <div class="footer-meta">
-        <span>v1.0.1</span>
+        <span>v1.0.2</span>
         <span>&middot;</span>
         <span>Oddsify Labs</span>
         <span>&middot;</span>
@@ -373,7 +373,7 @@
     </div>
   </footer>
 
-  <script src="/js/icons.js"></script>
-  <script src="/js/dashboard.js"></script>
+  <script src="/js/icons.js?v=2"></script>
+  <script src="/js/dashboard.js?v=2"></script>
 </body>
 </html>

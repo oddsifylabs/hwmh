@@ -113,7 +113,7 @@ function renderMetrics(status, queues) {
   document.getElementById('metric-queue').textContent     = queueDepth;
   document.getElementById('badge-queue').textContent      = queueDepth;
 
-  const completedToday = (global.taskHistory || []).filter(t => {
+  const completedToday = (window.taskHistory || []).filter(t => {
     const d = new Date(t.timestamp);
     const now = new Date();
     return d.toDateString() === now.toDateString();
