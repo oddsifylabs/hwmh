@@ -1,5 +1,5 @@
 /* ============================================================
-   HWMH Dashboard JS v2
+   HWMH Dashboard JS v3
    Hermes Workers Management Hub — Oddsify Labs
    ============================================================ */
 
@@ -23,6 +23,7 @@ const API = {
 };
 
 let currentTab = 'dashboard';
+let currentIntelTab = 'reasoning';
 let chatMessages = [];
 let chatUnread = 0;
 let chatPollInterval = null;
@@ -42,27 +43,44 @@ function switchTab(tab) {
   const nav = document.querySelector(`.nav-item[data-tab="${tab}"]`);
   if (nav) nav.classList.add('active');
 
-  if (tab === 'chat') {
-    chatUnread = 0;
-    updateChatBadge();
+  if (tab === 'intelligence') {
+    loadIntelTab();
   }
   if (tab === 'director') {
     directorUnread = 0;
     updateDirectorBadge();
+    loadDirectorChat();
+    loadRequests();
   }
-
-  // Auto-load tab content
   if (tab === 'workers') loadWorkersDetail();
   if (tab === 'tasks')   loadTasks();
-  if (tab === 'chat')    loadChat();
-  if (tab === 'reasoning') loadReasoning();
-  if (tab === 'decisions') loadDecisions();
-  if (tab === 'errors')  loadErrors();
   if (tab === 'system')  loadSystem();
   if (tab === 'config')  loadConfig();
-  if (tab === 'request') loadRequests();
-  if (tab === 'profiles') loadProfiles();
-  if (tab === 'director') loadDirectorChat();
+}
+
+/* ---------- Intelligence Sub-Tabs ---------- */
+function switchIntelTab(intelTab) {
+  currentIntelTab = intelTab;
+  document.querySelectorAll('.intel-panel').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sub-nav-item').forEach(el => el.classList.remove('active'));
+
+  const panel = document.getElementById('intel-' + intelTab);
+  if (panel) panel.classList.add('active');
+
+  const nav = document.querySelector(`.sub-nav-item[data-intel="${intelTab}"]`);
+  if (nav) nav.classList.add('active');
+
+  if (intelTab === 'reasoning') loadReasoning();
+  if (intelTab === 'decisions') loadDecisions();
+  if (intelTab === 'errors')    loadErrors();
+  if (intelTab === 'chat')      loadChat();
+}
+
+function loadIntelTab() {
+  if (currentIntelTab === 'reasoning') loadReasoning();
+  if (currentIntelTab === 'decisions') loadDecisions();
+  if (currentIntelTab === 'errors')    loadErrors();
+  if (currentIntelTab === 'chat')      loadChat();
 }
 
 /* ---------- Fetch helpers ---------- */
@@ -91,7 +109,7 @@ async function refreshAll(force = false) {
     renderMetrics(data.status, data.queues);
     if (currentTab === 'tasks') loadTasks();
     if (currentTab === 'system') loadSystem();
-    if (currentTab === 'profiles') loadProfiles();
+    if (currentTab === 'director') loadRequests();
   } catch (err) {
     console.error('Refresh failed:', err);
     toast('Refresh failed: ' + err.message, 'error');
@@ -203,72 +221,7 @@ async function clearAllQueues() {
   refreshAll();
 }
 
-/* ---------- Profiles ---------- */
-async function loadProfiles() {
-  try {
-    const data = workersData || await get(API.workers);
-    renderProfiles(data.workers, data.status);
-  } catch (err) {
-    console.error('Profiles load failed:', err);
-  }
-}
-
-function renderProfiles(workers, status) {
-  const grid = document.getElementById('profile-grid');
-  if (!grid) return;
-
-  grid.innerHTML = Object.entries(workers).map(([id, info]) => {
-    const meta = WORKER_META[id] || { icon: 'sophia', color: '#94a3b8' };
-    const st = status[id] || {};
-    const isOnline = st.status !== 'offline';
-    return `
-      <div class="profile-card" onclick="openProfile('${id}')">
-        <div class="profile-card-header">
-          <div class="profile-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 32)}</div>
-          <div class="profile-info">
-            <div class="profile-name">${info.name}</div>
-            <div class="profile-role">${info.role || ''}</div>
-          </div>
-          <span class="worker-status-badge ${isOnline ? 'badge-success' : 'badge-danger'}">${isOnline ? 'Online' : 'Offline'}</span>
-        </div>
-        <div class="worker-capabilities">
-          ${(info.capabilities || []).slice(0, 5).map(c => `<span class="cap-chip">${c}</span>`).join('')}
-        </div>
-        <div class="profile-stats">
-          <div class="profile-stat">
-            <div class="profile-stat-value" id="stat-${id}-total">-</div>
-            <div class="profile-stat-label">Tasks</div>
-          </div>
-          <div class="profile-stat">
-            <div class="profile-stat-value" id="stat-${id}-rate">-</div>
-            <div class="profile-stat-label">Success</div>
-          </div>
-          <div class="profile-stat">
-            <div class="profile-stat-value" id="stat-${id}-queue">${st.queueLength || 0}</div>
-            <div class="profile-stat-label">Queue</div>
-          </div>
-        </div>
-        <button class="btn btn-sm btn-primary profile-view-btn" onclick="event.stopPropagation();openProfile('${id}')">View Profile</button>
-      </div>
-    `;
-  }).join('');
-
-  // Load stats in background
-  Object.keys(workers).forEach(id => loadProfileStats(id));
-}
-
-async function loadProfileStats(workerId) {
-  try {
-    const data = await get(API.profile(workerId));
-    const totalEl = document.getElementById(`stat-${workerId}-total`);
-    const rateEl = document.getElementById(`stat-${workerId}-rate`);
-    if (totalEl) totalEl.textContent = data.stats.totalTasks;
-    if (rateEl) rateEl.textContent = data.stats.successRate + '%';
-  } catch (err) {
-    console.error('Profile stats failed:', err);
-  }
-}
-
+/* ---------- Profiles (merged into Workers) ---------- */
 async function openProfile(workerId) {
   try {
     const data = await get(API.profile(workerId));
@@ -425,7 +378,7 @@ function viewTask(id) {
   toast('Task detail view coming soon — ID: ' + id.slice(0,8), 'info');
 }
 
-/* ---------- Request Form ---------- */
+/* ---------- Request Form (now in Director tab) ---------- */
 const REQUEST_TEMPLATES = {
   research: {
     title: 'Research: ',
@@ -503,14 +456,14 @@ async function submitRequest() {
 
   try {
     const res = await post(API.requests, { title, description, worker, priority, category, tags });
-    toast(`Request submitted: ${res.request.title.slice(0, 40)}`, 'success');
+    toast(`Task submitted: ${res.request.title.slice(0, 40)}`, 'success');
     clearRequestForm();
     loadRequests();
   } catch (err) {
     toast('Submit failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `${icon('request', 14)} Submit Request`;
+    btn.innerHTML = `Submit Task`;
   }
 }
 
@@ -528,11 +481,11 @@ function renderRequests(requests) {
   if (!tbody) return;
 
   if (!requests.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px"><div class="empty-state"><div class="empty-state-icon">${icon('request', 48)}</div><div class="empty-state-text">No requests yet. Create one above!</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px"><div class="empty-state"><div class="empty-state-text">No tasks yet. Create one above!</div></div></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = requests.map(r => `
+  tbody.innerHTML = requests.slice(0, 20).map(r => `
     <tr>
       <td><strong>${escapeHtml(r.title)}</strong></td>
       <td>${r.worker === 'auto' ? `${icon('sophia', 14)} Auto` : `${icon(WORKER_META[r.worker]?.icon || 'sophia', 14)} ${WORKER_META[r.worker]?.name || r.worker}`}</td>
@@ -609,8 +562,8 @@ async function sendDirectorMessage() {
       [...(res.userMsg ? [res.userMsg] : []), ...(res.sophiaReply ? [res.sophiaReply] : [])],
       res.userMsg?.senderName || 'Director'
     );
-    // Refresh full conversation
     setTimeout(loadDirectorChat, 300);
+    setTimeout(loadRequests, 500);
   } catch (err) {
     toast('Message failed: ' + err.message, 'error');
   } finally {
@@ -637,9 +590,9 @@ async function loadChat() {
     const data = await get(API.history);
     const history = data.history || [];
 
-    if (currentTab !== 'chat' && history.length > chatMessages.length) {
+    if (currentTab !== 'intelligence' && currentIntelTab !== 'chat' && history.length > chatMessages.length) {
       chatUnread += history.length - chatMessages.length;
-      updateChatBadge();
+      updateIntelBadge();
     }
 
     chatMessages = history;
@@ -688,8 +641,8 @@ function renderChat(messages) {
   list.scrollTop = list.scrollHeight;
 }
 
-function updateChatBadge() {
-  const badge = document.getElementById('badge-chat-nav');
+function updateIntelBadge() {
+  const badge = document.getElementById('badge-intel-nav');
   if (!badge) return;
   badge.textContent = chatUnread;
   badge.style.display = chatUnread > 0 ? 'inline-flex' : 'none';
@@ -752,7 +705,11 @@ async function loadErrors() {
         <td>${escapeHtml(e.message || '')}</td>
       </tr>
     `).join('');
-    document.getElementById('badge-errors-nav').textContent = items.length;
+    const badge = document.getElementById('badge-intel-nav');
+    if (badge && items.length > 0) {
+      badge.textContent = items.length;
+      badge.style.display = 'inline-flex';
+    }
   } catch (err) { console.error(err); }
 }
 
@@ -783,13 +740,79 @@ async function loadSystem() {
   } catch (err) { console.error(err); }
 }
 
-/* ---------- Config ---------- */
+/* ---------- Config (redesigned UX) ---------- */
 async function loadConfig() {
   try {
     const data = await get(API.config);
-    const block = document.getElementById('config-block');
-    if (block) block.textContent = JSON.stringify(data, null, 2);
+    renderConfig(data);
   } catch (err) { console.error(err); }
+}
+
+function renderConfig(data) {
+  const container = document.getElementById('config-container');
+  if (!container) return;
+
+  const workers = data.workers || {};
+  const workerCards = Object.entries(workers).map(([id, cfg]) => {
+    const meta = WORKER_META[id] || { icon: 'sophia', color: '#94a3b8' };
+    return `
+      <div class="config-worker-card">
+        <div class="config-worker-header">
+          <div class="config-worker-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 24)}</div>
+          <div>
+            <div class="config-worker-name">${cfg.name}</div>
+            <div class="config-worker-role">${cfg.role || ''}</div>
+          </div>
+        </div>
+        <div class="config-worker-meta">
+          <div><span class="config-label">Type:</span> ${cfg.type || '—'}</div>
+          <div><span class="config-label">Transport:</span> ${cfg.transport || '—'}</div>
+          <div><span class="config-label">Risk Tier:</span> <span class="badge badge-${cfg.riskTier >= 2 ? 'warning' : 'success'}">Tier ${cfg.riskTier}</span></div>
+          <div><span class="config-label">Reports To:</span> ${cfg.reportsTo || cfg.isManager ? 'Director' : '—'}</div>
+        </div>
+        <div class="config-capabilities">
+          ${(cfg.capabilities || []).map(c => `<span class="cap-chip">${c}</span>`).join('')}
+        </div>
+        <div class="config-description">${cfg.description || ''}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="grid grid-2">
+      <div class="card config-meta-card">
+        <h4>System Settings</h4>
+        <div class="config-row">
+          <span class="config-label">Director Name</span>
+          <span class="config-value">${data.directorName || 'Director'}</span>
+        </div>
+        <div class="config-row">
+          <span class="config-label">Gottfried Verbose</span>
+          <span class="config-value">${data.gottfriedVerbose ? 'Enabled' : 'Disabled'}</span>
+        </div>
+        <div class="config-row">
+          <span class="config-label">Max History</span>
+          <span class="config-value">${data.maxHistory || '—'}</span>
+        </div>
+        <div class="config-row">
+          <span class="config-label">Data Directory</span>
+          <span class="config-value"><code>${data.dataDir || '—'}</code></span>
+        </div>
+        <div class="config-row">
+          <span class="config-label">State File</span>
+          <span class="config-value"><code>${data.stateFile || '—'}</code></span>
+        </div>
+      </div>
+      <div class="card config-meta-card">
+        <h4>Raw JSON</h4>
+        <pre class="code-block" style="max-height:280px;overflow:auto">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </div>
+    </div>
+    <h3 class="section-title">Workers</h3>
+    <div class="config-workers-grid">
+      ${workerCards}
+    </div>
+  `;
 }
 
 /* ---------- Command ---------- */
@@ -800,7 +823,7 @@ async function sendCommand() {
   if (!text) return;
 
   btn.disabled = true;
-  btn.textContent = 'Sending…';
+  btn.textContent = 'Sending...';
 
   try {
     const res = await post(API.command, { command: text, source: 'dashboard' });
@@ -808,7 +831,7 @@ async function sendCommand() {
     input.value = '';
     setTimeout(() => {
       refreshAll();
-      if (currentTab === 'chat') loadChat();
+      if (currentTab === 'intelligence' && currentIntelTab === 'chat') loadChat();
     }, 500);
   } catch (err) {
     toast('Send failed: ' + err.message, 'error');
@@ -872,15 +895,12 @@ function toast(message, type = 'info') {
 
 /* ---------- Icons Init ---------- */
 function initIcons() {
-  // Logo
   const logo = document.getElementById('logo-icon');
   if (logo) logo.innerHTML = icon('logo', 32);
 
-  // Footer logo
   const footerLogo = document.getElementById('footer-logo');
   if (footerLogo) footerLogo.innerHTML = icon('logo', 16);
 
-  // Sidebar nav icons
   document.querySelectorAll('.nav-icon[data-icon]').forEach(el => {
     const name = el.getAttribute('data-icon');
     if (name) el.innerHTML = icon(name, 18);

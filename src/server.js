@@ -156,6 +156,7 @@ const sophia = new Sophia({
         workerId: assignment.workerId,
         description: assignment.task,
         status: 'queued',
+        priority: assignment.priority || 'normal',
         timestamp: new Date().toISOString(),
         parentTaskId: assignment.parentTaskId
       };
@@ -202,11 +203,14 @@ function loadPersistedState() {
       if (queues[id]) queues[id] = tasks;
     }
   }
+  if (state && state.taskRequests) {
+    global.taskRequests = state.taskRequests;
+  }
 }
 loadPersistedState();
 
 function persistState() {
-  const state = { queues, workerStatus, timestamp: new Date().toISOString() };
+  const state = { queues, workerStatus, taskRequests: global.taskRequests || [], timestamp: new Date().toISOString() };
   saveState(state);
 }
 
@@ -272,50 +276,60 @@ app.post('/command', async (req, res) => {
   const { command, source = 'api', chatId, user } = req.body;
   if (!command) return res.status(400).json({ error: 'Missing command field' });
 
+  workerStatus.sophia.status = 'working';
+  workerStatus.sophia.lastSeen = new Date().toISOString();
+
   const parsed = parseCommand(command);
   const taskId = uuidv4();
 
-  if (parsed.type === 'manager-directive' || parsed.type === 'unknown') {
-    // Route everything through Sophia + Gottfried
-    const desc = parsed.type === 'unknown' ? parsed.raw : parsed.description;
-    const result = await sophia.receive({
-      id: taskId,
-      description: desc,
-      source,
-      chatId,
-      user,
-      timestamp: new Date().toISOString()
-    });
-    return res.json({ success: true, taskId, parsed: { type: 'manager-directive', description: desc }, result });
-  }
+  try {
+    if (parsed.type === 'manager-directive' || parsed.type === 'unknown') {
+      const desc = parsed.type === 'unknown' ? parsed.raw : parsed.description;
+      const result = await sophia.receive({
+        id: taskId,
+        description: desc,
+        source,
+        chatId,
+        user,
+        timestamp: new Date().toISOString()
+      });
+      workerStatus.sophia.status = 'idle';
+      return res.json({ success: true, taskId, parsed: { type: 'manager-directive', description: desc }, result });
+    }
 
-  if (parsed.type === 'worker-task') {
-    // Even @worker commands go through Sophia first
-    const result = await sophia.receive({
-      id: taskId,
-      description: command,
-      source,
-      chatId,
-      user,
-      timestamp: new Date().toISOString()
-    });
-    return res.json({ success: true, taskId, parsed, result });
-  }
+    if (parsed.type === 'worker-task') {
+      const result = await sophia.receive({
+        id: taskId,
+        description: command,
+        source,
+        chatId,
+        user,
+        timestamp: new Date().toISOString()
+      });
+      workerStatus.sophia.status = 'idle';
+      return res.json({ success: true, taskId, parsed, result });
+    }
 
-  if (parsed.type === 'agent-to-manager') {
-    const result = await sophia.receive({
-      id: taskId,
-      description: `[From @${parsed.agentId}] ${parsed.description}`,
-      source: 'agent',
-      agentId: parsed.agentId,
-      chatId,
-      user,
-      timestamp: new Date().toISOString()
-    });
-    return res.json({ success: true, taskId, parsed, result });
-  }
+    if (parsed.type === 'agent-to-manager') {
+      const result = await sophia.receive({
+        id: taskId,
+        description: `[From @${parsed.agentId}] ${parsed.description}`,
+        source: 'agent',
+        agentId: parsed.agentId,
+        chatId,
+        user,
+        timestamp: new Date().toISOString()
+      });
+      workerStatus.sophia.status = 'idle';
+      return res.json({ success: true, taskId, parsed, result });
+    }
 
-  res.status(400).json({ error: 'Could not parse command', parsed });
+    workerStatus.sophia.status = 'idle';
+    res.status(400).json({ error: 'Could not parse command', parsed });
+  } catch (err) {
+    workerStatus.sophia.status = 'error';
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Notification polling for Telegram bots
@@ -340,7 +354,10 @@ app.get('/poll/:workerId', (req, res) => {
   workerStatus[workerId].status = 'polling';
 
   const queue = queues[workerId];
-  const task = queue.find(t => t.status === 'queued');
+  const priorityWeight = { urgent: 4, high: 3, normal: 2, low: 1 };
+  const task = queue
+    .filter(t => t.status === 'queued')
+    .sort((a, b) => (priorityWeight[b.priority] || 2) - (priorityWeight[a.priority] || 2))[0];
 
   if (task) {
     task.status = 'active';
@@ -371,6 +388,17 @@ app.post('/complete/:workerId', (req, res) => {
   task.completedAt = new Date().toISOString();
   task.result = result;
   task.error = error;
+
+  // Update corresponding request status
+  if (global.taskRequests && global.taskRequests.length) {
+    const reqIdx = global.taskRequests.findIndex(r => r.id === taskId || r.taskId === taskId);
+    if (reqIdx !== -1) {
+      global.taskRequests[reqIdx].status = success ? 'completed' : 'failed';
+      global.taskRequests[reqIdx].completedAt = task.completedAt;
+      global.taskRequests[reqIdx].result = result;
+      global.taskRequests[reqIdx].error = error;
+    }
+  }
 
   // Move to history instead of deleting
   queue.splice(taskIndex, 1);
@@ -611,25 +639,54 @@ app.post('/api/requests', async (req, res) => {
   global.taskRequests.unshift(request);
   if (global.taskRequests.length > 500) global.taskRequests.pop();
 
-  // If auto, route through Sophia; otherwise direct to worker
-  const commandText = worker === 'auto'
-    ? `@sophia ${title}: ${description}`
-    : `@${worker} ${title}: ${description}`;
-
   try {
-    const result = await sophia.receive({
-      id: requestId,
-      description: commandText,
-      source: 'dashboard-request',
-      metadata: { title, priority, category, tags, originalWorker: worker },
-      timestamp: new Date().toISOString()
-    });
+    let result;
 
+    workerStatus.sophia.status = 'working';
+    workerStatus.sophia.lastSeen = new Date().toISOString();
+
+    if (worker !== 'auto') {
+      // Direct assignment — bypass Gottfried, queue straight to worker
+      const task = {
+        id: requestId,
+        workerId: worker,
+        description: `${title}: ${description}`,
+        status: 'queued',
+        priority,
+        category,
+        tags,
+        timestamp: new Date().toISOString(),
+        source: 'dashboard-request'
+      };
+      if (queues[worker]) {
+        queues[worker].push(task);
+        workerStatus[worker].queueLength = queues[worker].length;
+        console.log(`[QUEUE] Direct task ${requestId} -> @${worker} (priority: ${priority})`);
+      }
+      result = {
+        reply: `Directly assigned to ${WORKERS[worker]?.name || worker}.`,
+        delegated: [{ workerId: worker, task: description, assigned: true }],
+        confidence: 1.0
+      };
+    } else {
+      // Auto — route through Sophia + Gottfried
+      const commandText = `@sophia ${title}: ${description}`;
+      result = await sophia.receive({
+        id: requestId,
+        description: commandText,
+        source: 'dashboard-request',
+        metadata: { title, priority, category, tags, originalWorker: worker },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    workerStatus.sophia.status = 'idle';
     request.status = 'queued';
     request.taskId = requestId;
 
     res.json({ success: true, request, result });
   } catch (err) {
+    workerStatus.sophia.status = 'error';
     request.status = 'failed';
     request.error = err.message;
     res.status(500).json({ error: err.message, request });
@@ -735,12 +792,17 @@ app.post('/api/sophia/message', async (req, res) => {
   // Route through Sophia
   let sophiaReply = null;
   try {
+    workerStatus.sophia.status = 'working';
+    workerStatus.sophia.lastSeen = new Date().toISOString();
+
     const result = await sophia.receive({
       id: msgId,
       description: message.trim(),
       source: 'director-chat',
       timestamp: new Date().toISOString()
     });
+
+    workerStatus.sophia.status = 'idle';
 
     sophiaReply = {
       id: uuidv4(),
@@ -755,6 +817,7 @@ app.post('/api/sophia/message', async (req, res) => {
 
     global.sophiaConversation.push(sophiaReply);
   } catch (err) {
+    workerStatus.sophia.status = 'error';
     sophiaReply = {
       id: uuidv4(),
       sender: 'sophia',

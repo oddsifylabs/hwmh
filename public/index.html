@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWMH — Hermes Workers Management Hub</title>
-  <link rel="stylesheet" href="/css/dashboard.css?v=3">
+  <link rel="stylesheet" href="/css/dashboard.css?v=4">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" href="/favicon.png">
 </head>
@@ -24,16 +24,15 @@
       <a class="nav-item active" data-tab="dashboard" href="#" onclick="switchTab('dashboard');return false">
         <span class="nav-icon" data-icon="dashboard"></span> Dashboard
       </a>
-      <a class="nav-item" data-tab="request" href="#" onclick="switchTab('request');return false">
-        <span class="nav-icon" data-icon="request"></span> New Request
-        <span class="nav-badge badge-info" id="badge-request-nav">New</span>
+
+      <div class="nav-section">Operations</div>
+      <a class="nav-item" data-tab="director" href="#" onclick="switchTab('director');return false">
+        <span class="nav-icon" data-icon="director"></span> Director
+        <span class="nav-badge badge-info" id="badge-director-nav">0</span>
       </a>
       <a class="nav-item" data-tab="workers" href="#" onclick="switchTab('workers');return false">
         <span class="nav-icon" data-icon="workers"></span> Workers
         <span class="nav-badge" id="badge-workers-nav">4</span>
-      </a>
-      <a class="nav-item" data-tab="profiles" href="#" onclick="switchTab('profiles');return false">
-        <span class="nav-icon" data-icon="profiles"></span> Profiles
       </a>
       <a class="nav-item" data-tab="tasks" href="#" onclick="switchTab('tasks');return false">
         <span class="nav-icon" data-icon="tasks"></span> Tasks
@@ -41,23 +40,9 @@
       </a>
 
       <div class="nav-section">Intelligence</div>
-      <a class="nav-item" data-tab="director" href="#" onclick="switchTab('director');return false">
-        <span class="nav-icon" data-icon="director"></span> Director
-        <span class="nav-badge badge-info" id="badge-director-nav">0</span>
-      </a>
-      <a class="nav-item" data-tab="reasoning" href="#" onclick="switchTab('reasoning');return false">
-        <span class="nav-icon" data-icon="reasoning"></span> Reasoning
-      </a>
-      <a class="nav-item" data-tab="decisions" href="#" onclick="switchTab('decisions');return false">
-        <span class="nav-icon" data-icon="decisions"></span> Decisions
-      </a>
-      <a class="nav-item" data-tab="errors" href="#" onclick="switchTab('errors');return false">
-        <span class="nav-icon" data-icon="errors"></span> Errors
-        <span class="nav-badge badge-danger" id="badge-errors-nav">0</span>
-      </a>
-      <a class="nav-item" data-tab="chat" href="#" onclick="switchTab('chat');return false">
-        <span class="nav-icon" data-icon="chat"></span> Worker Chat
-        <span class="nav-badge badge-info" id="badge-chat-nav">0</span>
+      <a class="nav-item" data-tab="intelligence" href="#" onclick="switchTab('intelligence');return false">
+        <span class="nav-icon" data-icon="reasoning"></span> Intelligence
+        <span class="nav-badge badge-danger" id="badge-intel-nav" style="display:none">0</span>
       </a>
 
       <div class="nav-section">System</div>
@@ -122,7 +107,7 @@
           <div class="card">
             <h3>Quick Actions</h3>
             <div class="quick-actions">
-              <button class="btn btn-secondary" onclick="switchTab('request')">New Request</button>
+              <button class="btn btn-secondary" onclick="switchTab('director')">New Task</button>
               <button class="btn btn-secondary" onclick="clearAllQueues()">Clear All Queues</button>
               <button class="btn btn-secondary" onclick="switchTab('system')">View System</button>
             </div>
@@ -141,87 +126,111 @@
         </div>
       </div>
 
-      <!-- ============ REQUEST TAB ============ -->
-      <div id="tab-request" class="tab-panel">
-        <div class="header"><h2>New Request</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="switchTab('tasks')">View Tasks</button></div></div>
+      <!-- ============ DIRECTOR TAB ============ -->
+      <div id="tab-director" class="tab-panel">
+        <div class="header">
+          <h2>Director <span style="opacity:0.5">&#8596;</span> Sophia</h2>
+          <div class="header-actions">
+            <button class="btn btn-sm btn-secondary" onclick="loadDirectorChat()">Refresh</button>
+          </div>
+        </div>
+        <div class="info-banner">Direct communication channel with Sophia Hermes, your Manager Agent. All messages are logged and tasks are auto-delegated.</div>
 
-        <div class="request-form card">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Title</label>
-              <input type="text" id="req-title" placeholder="e.g., Research competitor pricing">
+        <!-- New Task Form embedded in Director tab -->
+        <div class="grid grid-2" style="margin-bottom:24px">
+          <div class="request-form card">
+            <h3>New Task</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="req-title" placeholder="e.g., Research competitor pricing">
+              </div>
+              <div class="form-group">
+                <label>Category</label>
+                <select id="req-category">
+                  <option value="general">General</option>
+                  <option value="research">Research</option>
+                  <option value="content">Content</option>
+                  <option value="development">Development</option>
+                  <option value="social">Social Media</option>
+                  <option value="sales">Sales / Marketing</option>
+                  <option value="admin">Admin</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assign To</label>
+                <select id="req-worker">
+                  <option value="auto">Auto (Sophia decides)</option>
+                  <option value="iris">Iris — Admin & Research</option>
+                  <option value="pheme">Pheme — Social Media</option>
+                  <option value="kairos">Kairos — Sales & Marketing</option>
+                  <option value="sophia">Sophia — Manager</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Priority</label>
+                <select id="req-priority">
+                  <option value="low">Low</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
             </div>
             <div class="form-group">
-              <label>Category</label>
-              <select id="req-category">
-                <option value="general">General</option>
-                <option value="research">Research</option>
-                <option value="content">Content</option>
-                <option value="development">Development</option>
-                <option value="social">Social Media</option>
-                <option value="sales">Sales / Marketing</option>
-                <option value="admin">Admin</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Assign To</label>
-              <select id="req-worker">
-                <option value="auto">Auto (Sophia decides)</option>
-                <option value="iris">Iris — Admin & Research</option>
-                <option value="pheme">Pheme — Social Media</option>
-                <option value="kairos">Kairos — Sales & Marketing</option>
-                <option value="sophia">Sophia — Manager</option>
-              </select>
+              <label>Description</label>
+              <textarea id="req-description" rows="4" placeholder="Describe what needs to be done in detail..."></textarea>
             </div>
             <div class="form-group">
-              <label>Priority</label>
-              <select id="req-priority">
-                <option value="low">Low</option>
-                <option value="normal" selected>Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
+              <label>Tags (comma-separated)</label>
+              <input type="text" id="req-tags" placeholder="e.g., website, competitors, q2-2026">
+            </div>
+            <div class="request-templates">
+              <label>Quick Templates:</label>
+              <div class="template-chips">
+                <button class="chip" onclick="fillTemplate('research')">Research</button>
+                <button class="chip" onclick="fillTemplate('content')">Write Content</button>
+                <button class="chip" onclick="fillTemplate('social')">Social Post</button>
+                <button class="chip" onclick="fillTemplate('code')">Code Task</button>
+                <button class="chip" onclick="fillTemplate('email')">Draft Email</button>
+                <button class="chip" onclick="fillTemplate('meeting')">Schedule Meeting</button>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">Submit Task</button>
+              <button class="btn btn-secondary" onclick="clearRequestForm()">Clear</button>
             </div>
           </div>
 
-          <div class="form-group">
-            <label>Description</label>
-            <textarea id="req-description" rows="5" placeholder="Describe what needs to be done in detail..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label>Tags (comma-separated)</label>
-            <input type="text" id="req-tags" placeholder="e.g., website, competitors, q2-2026">
-          </div>
-
-          <div class="request-templates">
-            <label>Quick Templates:</label>
-            <div class="template-chips">
-              <button class="chip" onclick="fillTemplate('research')">Research</button>
-              <button class="chip" onclick="fillTemplate('content')">Write Content</button>
-              <button class="chip" onclick="fillTemplate('social')">Social Post</button>
-              <button class="chip" onclick="fillTemplate('code')">Code Task</button>
-              <button class="chip" onclick="fillTemplate('email')">Draft Email</button>
-              <button class="chip" onclick="fillTemplate('meeting')">Schedule Meeting</button>
+          <div class="card">
+            <h3>Recent Tasks</h3>
+            <div class="table-wrap">
+              <table class="data-table" id="requests-table">
+                <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody id="requests-table-body"></tbody>
+              </table>
             </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn btn-primary" id="req-submit" onclick="submitRequest()">Submit Request</button>
-            <button class="btn btn-secondary" onclick="clearRequestForm()">Clear</button>
           </div>
         </div>
 
-        <h3 class="section-title">Recent Requests</h3>
-        <div class="table-wrap">
-          <table class="data-table" id="requests-table">
-            <thead><tr><th>Title</th><th>Worker</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
-            <tbody id="requests-table-body"></tbody>
-          </table>
+        <div class="director-chat-container">
+          <div class="director-chat-messages" id="director-chat-messages"></div>
+          <div class="director-chat-input">
+            <div class="director-quick-actions">
+              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">Status Report</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">Auto Delegate</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">Review Queues</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">Daily Summary</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">Check Errors</button>
+            </div>
+            <div class="director-input-row">
+              <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
+              <button class="btn btn-primary" id="director-send-btn" onclick="sendDirectorMessage()">Send</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -231,19 +240,13 @@
         <div class="worker-grid" id="worker-grid-detail"></div>
       </div>
 
-      <!-- ============ PROFILES TAB ============ -->
-      <div id="tab-profiles" class="tab-panel">
-        <div class="header"><h2>Worker Profiles</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadProfiles()">Refresh</button></div></div>
-        <div class="profile-grid" id="profile-grid"></div>
-      </div>
-
       <!-- ============ PROFILE DETAIL ============ -->
       <div id="tab-profile-detail" class="tab-panel">
         <div class="profile-detail-view">
           <div class="header">
             <h2 id="profile-detail-title">Worker Profile</h2>
             <div class="header-actions">
-              <button class="btn btn-sm btn-secondary" onclick="switchTab('profiles')">Back to Profiles</button>
+              <button class="btn btn-sm btn-secondary" onclick="switchTab('workers')">Back to Workers</button>
             </div>
           </div>
           <div id="profile-detail-content"></div>
@@ -279,63 +282,39 @@
         </div>
       </div>
 
-      <!-- ============ DIRECTOR TAB (Sophia Chat) ============ -->
-      <div id="tab-director" class="tab-panel">
+      <!-- ============ INTELLIGENCE TAB ============ -->
+      <div id="tab-intelligence" class="tab-panel">
         <div class="header">
-          <h2>Director <span style="opacity:0.5">&#8596;</span> Sophia</h2>
+          <h2>Intelligence</h2>
           <div class="header-actions">
-            <button class="btn btn-sm btn-secondary" onclick="loadDirectorChat()">Refresh</button>
+            <button class="btn btn-sm btn-secondary" onclick="loadIntelTab()">Refresh</button>
           </div>
         </div>
-        <div class="info-banner">Direct communication channel with Sophia Hermes, your Manager Agent. All messages are logged and tasks are auto-delegated.</div>
+        <div class="info-banner">Gottfried's reasoning, Sophia's decisions, error logs, and worker chat feed — all in one place.</div>
 
-        <div class="director-chat-container">
-          <div class="director-chat-messages" id="director-chat-messages"></div>
-          <div class="director-chat-input">
-            <div class="director-quick-actions">
-              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">Status Report</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">Auto Delegate</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">Review Queues</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">Daily Summary</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">Check Errors</button>
-            </div>
-            <div class="director-input-row">
-              <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
-              <button class="btn btn-primary" id="director-send-btn" onclick="sendDirectorMessage()">Send</button>
-            </div>
+        <div class="sub-nav">
+          <button class="sub-nav-item active" data-intel="reasoning" onclick="switchIntelTab('reasoning')">Reasoning</button>
+          <button class="sub-nav-item" data-intel="decisions" onclick="switchIntelTab('decisions')">Decisions</button>
+          <button class="sub-nav-item" data-intel="errors" onclick="switchIntelTab('errors')">Errors</button>
+          <button class="sub-nav-item" data-intel="chat" onclick="switchIntelTab('chat')">Worker Chat</button>
+        </div>
+
+        <div id="intel-reasoning" class="intel-panel active">
+          <div class="log-list" id="reasoning-list"></div>
+        </div>
+        <div id="intel-decisions" class="intel-panel">
+          <div class="log-list" id="decisions-list"></div>
+        </div>
+        <div id="intel-errors" class="intel-panel">
+          <div class="table-wrap">
+            <table class="data-table"><thead><tr><th>Time</th><th>Agent</th><th>Level</th><th>Message</th></tr></thead>
+            <tbody id="errors-table-body"></tbody>
+            </table>
           </div>
         </div>
-      </div>
-
-      <!-- ============ REASONING TAB ============ -->
-      <div id="tab-reasoning" class="tab-panel">
-        <div class="header"><h2>Gottfried Reasoning</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadReasoning()">Refresh</button></div></div>
-        <div class="info-banner">Gottfried is the brain. Every decision he makes is logged here.</div>
-        <div class="log-list" id="reasoning-list"></div>
-      </div>
-
-      <!-- ============ DECISIONS TAB ============ -->
-      <div id="tab-decisions" class="tab-panel">
-        <div class="header"><h2>Sophia Decisions</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadDecisions()">Refresh</button></div></div>
-        <div class="info-banner">Sophia's delegation and command processing history.</div>
-        <div class="log-list" id="decisions-list"></div>
-      </div>
-
-      <!-- ============ ERRORS TAB ============ -->
-      <div id="tab-errors" class="tab-panel">
-        <div class="header"><h2>Error Log</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadErrors()">Refresh</button></div></div>
-        <div class="table-wrap">
-          <table class="data-table"><thead><tr><th>Time</th><th>Agent</th><th>Level</th><th>Message</th></tr></thead>
-          <tbody id="errors-table-body"></tbody>
-          </table>
+        <div id="intel-chat" class="intel-panel">
+          <div class="chat-list" id="chat-list"></div>
         </div>
-      </div>
-
-      <!-- ============ CHAT TAB ============ -->
-      <div id="tab-chat" class="tab-panel">
-        <div class="header"><h2>Worker Chat</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadChat()">Refresh</button></div></div>
-        <div class="info-banner">Live feed of worker task outputs and completions.</div>
-        <div class="chat-list" id="chat-list"></div>
       </div>
 
       <!-- ============ SYSTEM TAB ============ -->
@@ -354,7 +333,7 @@
       <div id="tab-config" class="tab-panel">
         <div class="header"><h2>Configuration</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadConfig()">Refresh</button></div></div>
         <div class="info-banner">Current active worker configuration loaded from <code>config/workers.json</code></div>
-        <pre class="code-block" id="config-block"></pre>
+        <div id="config-container"></div>
       </div>
     </main>
   </div>
@@ -369,7 +348,7 @@
         <strong>HWMH</strong> — Hermes Workers Management Hub
       </div>
       <div class="footer-meta">
-        <span>v1.0.2</span>
+        <span>v1.0.3</span>
         <span>&middot;</span>
         <span>Oddsify Labs</span>
         <span>&middot;</span>
@@ -380,7 +359,7 @@
     </div>
   </footer>
 
-  <script src="/js/icons.js?v=3"></script>
-  <script src="/js/dashboard.js?v=3"></script>
+  <script src="/js/icons.js?v=4"></script>
+  <script src="/js/dashboard.js?v=4"></script>
 </body>
 </html>
