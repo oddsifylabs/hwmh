@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWMH — Hermes Workers Management Hub</title>
-  <link rel="stylesheet" href="/css/dashboard.css?v=2">
+  <link rel="stylesheet" href="/css/dashboard.css?v=3">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" href="/favicon.png">
 </head>
@@ -129,12 +129,15 @@
           </div>
         </div>
 
-        <h3 class="section-title">Worker Status</h3>
-          <div class="worker-grid" id="worker-grid"></div>
-        </div>
-        <div class="card">
-          <h3 class="section-title">Live Activity</h3>
-          <div class="activity-feed" id="activity-feed"></div>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 class="section-title">Worker Status</h3>
+            <div class="worker-grid" id="worker-grid"></div>
+          </div>
+          <div class="card">
+            <h3 class="section-title">Live Activity</h3>
+            <div class="activity-feed" id="activity-feed"></div>
+          </div>
         </div>
       </div>
 
@@ -279,9 +282,9 @@
       <!-- ============ DIRECTOR TAB (Sophia Chat) ============ -->
       <div id="tab-director" class="tab-panel">
         <div class="header">
-          <h2>&#128081; Director ↔ Sophia</h2>
+          <h2>Director <span style="opacity:0.5">&#8596;</span> Sophia</h2>
           <div class="header-actions">
-            <button class="btn btn-sm btn-secondary" onclick="loadDirectorChat()">&#128260; Refresh</button>
+            <button class="btn btn-sm btn-secondary" onclick="loadDirectorChat()">Refresh</button>
           </div>
         </div>
         <div class="info-banner">Direct communication channel with Sophia Hermes, your Manager Agent. All messages are logged and tasks are auto-delegated.</div>
@@ -290,11 +293,11 @@
           <div class="director-chat-messages" id="director-chat-messages"></div>
           <div class="director-chat-input">
             <div class="director-quick-actions">
-              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">&#128202; Status Report</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">&#129302; Auto Delegate</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">&#128203; Review Queues</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">&#128197; Daily Summary</button>
-              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">&#9888;&#65039; Check Errors</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Status report')">Status Report</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Delegate to best worker')">Auto Delegate</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Review all queues')">Review Queues</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Summarize today')">Daily Summary</button>
+              <button class="chip chip-small" onclick="sendDirectorQuick('Check for errors')">Check Errors</button>
             </div>
             <div class="director-input-row">
               <input type="text" id="director-input" placeholder="Type a message to Sophia..." onkeydown="if(event.key==='Enter')sendDirectorMessage()">
@@ -306,21 +309,21 @@
 
       <!-- ============ REASONING TAB ============ -->
       <div id="tab-reasoning" class="tab-panel">
-        <div class="header"><h2>&#129504; Gottfried Reasoning</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadReasoning()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Gottfried Reasoning</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadReasoning()">Refresh</button></div></div>
         <div class="info-banner">Gottfried is the brain. Every decision he makes is logged here.</div>
         <div class="log-list" id="reasoning-list"></div>
       </div>
 
       <!-- ============ DECISIONS TAB ============ -->
       <div id="tab-decisions" class="tab-panel">
-        <div class="header"><h2>&#9989; Sophia Decisions</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadDecisions()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Sophia Decisions</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadDecisions()">Refresh</button></div></div>
         <div class="info-banner">Sophia's delegation and command processing history.</div>
         <div class="log-list" id="decisions-list"></div>
       </div>
 
       <!-- ============ ERRORS TAB ============ -->
       <div id="tab-errors" class="tab-panel">
-        <div class="header"><h2>&#9888;&#65039; Error Log</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadErrors()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Error Log</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadErrors()">Refresh</button></div></div>
         <div class="table-wrap">
           <table class="data-table"><thead><tr><th>Time</th><th>Agent</th><th>Level</th><th>Message</th></tr></thead>
           <tbody id="errors-table-body"></tbody>
@@ -330,22 +333,26 @@
 
       <!-- ============ CHAT TAB ============ -->
       <div id="tab-chat" class="tab-panel">
-        <div class="header"><h2>&#128172; Worker Chat</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadChat()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Worker Chat</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadChat()">Refresh</button></div></div>
         <div class="info-banner">Live feed of worker task outputs and completions.</div>
         <div class="chat-list" id="chat-list"></div>
       </div>
 
       <!-- ============ SYSTEM TAB ============ -->
       <div id="tab-system" class="tab-panel">
-        <div class="header"><h2>&#9881;&#65039; System</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadSystem()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>System</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadSystem()">Refresh</button></div></div>
         <div class="grid grid-2" id="system-grid"></div>
-        <h3 class="section-title">&#128202; Memory Usage</h3>
+        <h3 class="section-title">Memory Usage</h3>
         <div class="card" id="memory-card"></div>
+        <h3 class="section-title">Live Activity</h3>
+        <div class="card">
+          <div class="activity-feed" id="activity-feed-system"></div>
+        </div>
       </div>
 
       <!-- ============ CONFIG TAB ============ -->
       <div id="tab-config" class="tab-panel">
-        <div class="header"><h2>&#128295; Configuration</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadConfig()">&#128260; Refresh</button></div></div>
+        <div class="header"><h2>Configuration</h2><div class="header-actions"><button class="btn btn-sm btn-secondary" onclick="loadConfig()">Refresh</button></div></div>
         <div class="info-banner">Current active worker configuration loaded from <code>config/workers.json</code></div>
         <pre class="code-block" id="config-block"></pre>
       </div>
@@ -373,7 +380,7 @@
     </div>
   </footer>
 
-  <script src="/js/icons.js?v=2"></script>
-  <script src="/js/dashboard.js?v=2"></script>
+  <script src="/js/icons.js?v=3"></script>
+  <script src="/js/dashboard.js?v=3"></script>
 </body>
 </html>
