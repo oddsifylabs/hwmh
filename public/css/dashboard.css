@@ -38,6 +38,53 @@ html, body {
   padding-bottom: 56px; /* footer space */
 }
 
+/* ---------- Icons ---------- */
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.logo-icon svg,
+.footer-logo svg {
+  width: 100%;
+  height: 100%;
+}
+.worker-avatar svg,
+.profile-avatar svg,
+.profile-detail-avatar svg {
+  width: 60%;
+  height: 60%;
+}
+.svg-btn-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.svg-btn-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.status-dot svg {
+  width: 10px;
+  height: 10px;
+}
+.priority-badge svg {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
 /* ---------- Sidebar ---------- */
 .sidebar {
   width: 240px;

@@ -124,10 +124,10 @@ function renderMetrics(status, queues) {
 
 /* ---------- Workers ---------- */
 const WORKER_META = {
-  sophia: { icon: '👑', color: '#6366f1' },
-  iris:   { icon: '📋', color: '#10b981' },
-  pheme:  { icon: '📢', color: '#f59e0b' },
-  kairos: { icon: '🎯', color: '#ef4444' }
+  sophia: { icon: 'sophia', color: '#6366f1', name: 'Sophia Hermes' },
+  iris:   { icon: 'iris', color: '#10b981', name: 'Iris Hermes' },
+  pheme:  { icon: 'pheme', color: '#f59e0b', name: 'Pheme Hermes' },
+  kairos: { icon: 'kairos', color: '#ef4444', name: 'Kairos Hermes' }
 };
 
 function renderWorkers(workers, status, queues) {
@@ -137,7 +137,7 @@ function renderWorkers(workers, status, queues) {
 
   const html = Object.entries(workers).map(([id, info]) => {
     const st = status[id] || {};
-    const meta = WORKER_META[id] || { icon: '🤖', color: '#94a3b8' };
+    const meta = WORKER_META[id] || { icon: 'sophia', color: '#94a3b8' };
     const isOnline = st.status !== 'offline';
     const statusLabel = st.status || 'idle';
     const lastSeen = st.lastSeen ? timeAgo(st.lastSeen) : 'Never';
@@ -147,7 +147,7 @@ function renderWorkers(workers, status, queues) {
     return `
       <div class="worker-card ${isOnline ? 'online' : 'offline'}" onclick="openProfile('${id}')">
         <div class="worker-header">
-          <div class="worker-avatar" style="background:${meta.color}">${meta.icon}</div>
+          <div class="worker-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 28)}</div>
           <div class="worker-info">
             <div class="worker-name">${info.name}</div>
             <div class="worker-role">${info.role || info.description || ''}</div>
@@ -218,13 +218,13 @@ function renderProfiles(workers, status) {
   if (!grid) return;
 
   grid.innerHTML = Object.entries(workers).map(([id, info]) => {
-    const meta = WORKER_META[id] || { icon: '🤖', color: '#94a3b8' };
+    const meta = WORKER_META[id] || { icon: 'sophia', color: '#94a3b8' };
     const st = status[id] || {};
     const isOnline = st.status !== 'offline';
     return `
       <div class="profile-card" onclick="openProfile('${id}')">
         <div class="profile-card-header">
-          <div class="profile-avatar" style="background:${meta.color}">${meta.icon}</div>
+          <div class="profile-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 32)}</div>
           <div class="profile-info">
             <div class="profile-name">${info.name}</div>
             <div class="profile-role">${info.role || ''}</div>
@@ -280,7 +280,7 @@ async function openProfile(workerId) {
 }
 
 function renderProfileDetail(data) {
-  const meta = WORKER_META[data.workerId] || { icon: '🤖', color: '#94a3b8' };
+  const meta = WORKER_META[data.workerId] || { icon: 'sophia', color: '#94a3b8' };
   const title = document.getElementById('profile-detail-title');
   if (title) title.textContent = `${data.name} — Profile`;
 
@@ -292,7 +292,7 @@ function renderProfileDetail(data) {
 
   content.innerHTML = `
     <div class="profile-detail-header">
-      <div class="profile-detail-avatar" style="background:${meta.color}">${meta.icon}</div>
+      <div class="profile-detail-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 44)}</div>
       <div class="profile-detail-info">
         <h3>${data.name}</h3>
         <div class="role">${data.role || ''} — ${data.description || ''}</div>
@@ -359,7 +359,7 @@ function renderProfileDetail(data) {
         `).join('')}
       </div>
     </div>
-    ` : '<div class="empty-state"><div class="empty-state-icon">📤</div><div class="empty-state-text">No outputs yet. Tasks will appear here once completed.</div></div>'}
+    ` : `<div class="empty-state"><div class="empty-state-icon">${icon('empty', 48)}</div><div class="empty-state-text">No outputs yet. Tasks will appear here once completed.</div></div>`}
 
     ${data.timeline.length ? `
     <div class="profile-section">
@@ -510,7 +510,7 @@ async function submitRequest() {
     toast('Submit failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🚀 Submit Request';
+    btn.innerHTML = `${icon('request', 14)} Submit Request`;
   }
 }
 
@@ -528,14 +528,14 @@ function renderRequests(requests) {
   if (!tbody) return;
 
   if (!requests.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">No requests yet. Create one above!</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px"><div class="empty-state"><div class="empty-state-icon">${icon('request', 48)}</div><div class="empty-state-text">No requests yet. Create one above!</div></div></td></tr>`;
     return;
   }
 
   tbody.innerHTML = requests.map(r => `
     <tr>
       <td><strong>${escapeHtml(r.title)}</strong></td>
-      <td>${r.worker === 'auto' ? '🤖 Auto' : WORKER_META[r.worker]?.icon + ' ' + r.worker}</td>
+      <td>${r.worker === 'auto' ? `${icon('sophia', 14)} Auto` : `${icon(WORKER_META[r.worker]?.icon || 'sophia', 14)} ${WORKER_META[r.worker]?.name || r.worker}`}</td>
       <td><span class="badge badge-${r.priority === 'urgent' ? 'danger' : r.priority === 'high' ? 'warning' : r.priority === 'low' ? 'info' : 'success'}">${r.priority}</span></td>
       <td><span class="badge badge-${r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : r.status === 'queued' ? 'info' : 'warning'}">${r.status}</span></td>
       <td>${timeAgo(r.createdAt)}</td>
@@ -560,7 +560,7 @@ function renderDirectorMessages(messages, directorName) {
   if (!messages.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">👑</div>
+        <div class="empty-state-icon">${icon('director', 48)}</div>
         <div class="empty-state-text">Welcome, ${directorName}. Send a message to Sophia to get started.</div>
       </div>
     `;
@@ -569,13 +569,13 @@ function renderDirectorMessages(messages, directorName) {
 
   container.innerHTML = messages.map(m => {
     const isDirector = m.sender === 'director';
-    const avatar = isDirector ? '👤' : '👑';
+    const avatarIcon = isDirector ? 'profiles' : 'sophia';
     const color = isDirector ? '#6366f1' : '#f59e0b';
     const name = isDirector ? directorName : 'Sophia Hermes';
 
     return `
       <div class="director-msg ${m.sender}">
-        <div class="director-msg-avatar" style="background:${color}">${avatar}</div>
+        <div class="director-msg-avatar" style="background:${color};color:#fff">${icon(avatarIcon, 20)}</div>
         <div class="director-msg-body">
           <div class="director-msg-name">${name}</div>
           <div class="director-msg-text">${escapeHtml(m.text || '')}</div>
@@ -654,23 +654,23 @@ function renderChat(messages) {
   if (!list) return;
 
   if (!messages.length) {
-    list.innerHTML = '<div class="chat-empty">No messages yet. Send a command to get started.</div>';
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icon('empty', 48)}</div><div class="empty-state-text">No messages yet. Send a command to get started.</div></div>`;
     return;
   }
 
   list.innerHTML = messages.map(m => {
-    const meta = WORKER_META[m.workerId] || { icon: '🤖', color: '#94a3b8' };
+    const meta = WORKER_META[m.workerId] || { icon: 'sophia', color: '#94a3b8' };
     const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
     const resultHtml = m.result
       ? `<div class="chat-result">${escapeHtml(String(m.result)).replace(/\n/g, '<br>')}</div>`
       : '';
     const errorHtml = m.error
-      ? `<div class="chat-error">⚠️ ${escapeHtml(String(m.error))}</div>`
+      ? `<div class="chat-error">${icon('warning', 14)} ${escapeHtml(String(m.error))}</div>`
       : '';
 
     return `
       <div class="chat-bubble">
-        <div class="chat-avatar" style="background:${meta.color}">${meta.icon}</div>
+        <div class="chat-avatar" style="background:${meta.color};color:#fff">${icon(meta.icon, 22)}</div>
         <div class="chat-body">
           <div class="chat-meta">
             <strong>${escapeHtml(WORKER_META[m.workerId]?.name || m.workerId)}</strong>
@@ -870,8 +870,26 @@ function toast(message, type = 'info') {
   }, 4000);
 }
 
+/* ---------- Icons Init ---------- */
+function initIcons() {
+  // Logo
+  const logo = document.getElementById('logo-icon');
+  if (logo) logo.innerHTML = icon('logo', 32);
+
+  // Footer logo
+  const footerLogo = document.getElementById('footer-logo');
+  if (footerLogo) footerLogo.innerHTML = icon('logo', 16);
+
+  // Sidebar nav icons
+  document.querySelectorAll('.nav-icon[data-icon]').forEach(el => {
+    const name = el.getAttribute('data-icon');
+    if (name) el.innerHTML = icon(name, 18);
+  });
+}
+
 /* ---------- Init ---------- */
 document.addEventListener('DOMContentLoaded', () => {
+  initIcons();
   refreshAll();
   startChatPolling();
 

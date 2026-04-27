@@ -456,47 +456,20 @@ app.get('/api/logs', (req, res) => {
   res.json({ logs: logs.slice(0, 100) });
 });
 
-// Health check for Railway + comprehensive status
+// Health check for Railway — ALWAYS return 200 if the server is responsive.
+// Railway only checks this at deploy time to know when to route traffic.
+// Worker health / detailed status lives at /status.
 app.get('/health', (req, res) => {
-  const now = Date.now();
-  const workerHealth = {};
-  let allWorkersHealthy = true;
-
-  for (const [id, cfg] of Object.entries(WORKERS)) {
-    const s = workerStatus[id] || {};
-    const lastSeen = s.lastSeen ? new Date(s.lastSeen).getTime() : 0;
-    const offlineThreshold = 3 * 60 * 1000; // 3 min
-    const isOffline = id !== 'sophia' && (!lastSeen || (now - lastSeen > offlineThreshold));
-    const healthy = !isOffline;
-    if (!healthy) allWorkersHealthy = false;
-
-    workerHealth[id] = {
-      name: cfg.name,
-      status: s.status || 'unknown',
-      lastSeen: s.lastSeen || null,
-      queueLength: s.queueLength || 0,
-      healthy
-    };
-  }
-
-  const secretHealth = secrets.healthCheck();
   const memory = process.memoryUsage();
-  const healthy = secretHealth.ok && allWorkersHealthy;
-
-  res.status(healthy ? 200 : 503).json({
-    status: healthy ? 'healthy' : 'degraded',
+  res.status(200).json({
+    status: 'healthy',
     service: 'hwmh',
-    version: '1.0.1',
+    version: '1.0.2',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     memory: {
       rss: Math.round(memory.rss / 1024 / 1024) + 'MB',
       heapUsed: Math.round(memory.heapUsed / 1024 / 1024) + 'MB'
-    },
-    workers: workerHealth,
-    secrets: {
-      ok: secretHealth.ok,
-      onepassword: secretHealth.onepassword
     }
   });
 });

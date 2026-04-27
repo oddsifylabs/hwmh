@@ -13,7 +13,7 @@
     <!-- Sidebar -->
     <nav class="sidebar">
       <div class="sidebar-brand">
-        <div class="logo-icon">&#9889;</div>
+        <div class="logo-icon" id="logo-icon"></div>
         <div>
           <h1>HWMH</h1>
           <span>Command Center</span>
@@ -22,50 +22,50 @@
 
       <div class="nav-section">Overview</div>
       <a class="nav-item active" data-tab="dashboard" href="#" onclick="switchTab('dashboard');return false">
-        <span class="nav-icon">&#127968;</span> Dashboard
+        <span class="nav-icon" data-icon="dashboard"></span> Dashboard
       </a>
       <a class="nav-item" data-tab="request" href="#" onclick="switchTab('request');return false">
-        <span class="nav-icon">&#9997;&#65039;</span> New Request
+        <span class="nav-icon" data-icon="request"></span> New Request
         <span class="nav-badge badge-info" id="badge-request-nav">New</span>
       </a>
       <a class="nav-item" data-tab="workers" href="#" onclick="switchTab('workers');return false">
-        <span class="nav-icon">&#128104;&#8205;&#128187;</span> Workers
+        <span class="nav-icon" data-icon="workers"></span> Workers
         <span class="nav-badge" id="badge-workers-nav">4</span>
       </a>
       <a class="nav-item" data-tab="profiles" href="#" onclick="switchTab('profiles');return false">
-        <span class="nav-icon">&#128100;</span> Profiles
+        <span class="nav-icon" data-icon="profiles"></span> Profiles
       </a>
       <a class="nav-item" data-tab="tasks" href="#" onclick="switchTab('tasks');return false">
-        <span class="nav-icon">&#128203;</span> Tasks
+        <span class="nav-icon" data-icon="tasks"></span> Tasks
         <span class="nav-badge" id="badge-tasks-nav">0</span>
       </a>
 
       <div class="nav-section">Intelligence</div>
       <a class="nav-item" data-tab="director" href="#" onclick="switchTab('director');return false">
-        <span class="nav-icon">&#128081;</span> Director
+        <span class="nav-icon" data-icon="director"></span> Director
         <span class="nav-badge badge-info" id="badge-director-nav">0</span>
       </a>
       <a class="nav-item" data-tab="reasoning" href="#" onclick="switchTab('reasoning');return false">
-        <span class="nav-icon">&#129504;</span> Reasoning
+        <span class="nav-icon" data-icon="reasoning"></span> Reasoning
       </a>
       <a class="nav-item" data-tab="decisions" href="#" onclick="switchTab('decisions');return false">
-        <span class="nav-icon">&#9989;</span> Decisions
+        <span class="nav-icon" data-icon="decisions"></span> Decisions
       </a>
       <a class="nav-item" data-tab="errors" href="#" onclick="switchTab('errors');return false">
-        <span class="nav-icon">&#9888;&#65039;</span> Errors
+        <span class="nav-icon" data-icon="errors"></span> Errors
         <span class="nav-badge badge-danger" id="badge-errors-nav">0</span>
       </a>
       <a class="nav-item" data-tab="chat" href="#" onclick="switchTab('chat');return false">
-        <span class="nav-icon">&#128172;</span> Worker Chat
+        <span class="nav-icon" data-icon="chat"></span> Worker Chat
         <span class="nav-badge badge-info" id="badge-chat-nav">0</span>
       </a>
 
       <div class="nav-section">System</div>
       <a class="nav-item" data-tab="system" href="#" onclick="switchTab('system');return false">
-        <span class="nav-icon">&#9881;&#65039;</span> System
+        <span class="nav-icon" data-icon="system"></span> System
       </a>
       <a class="nav-item" data-tab="config" href="#" onclick="switchTab('config');return false">
-        <span class="nav-icon">&#128295;</span> Config
+        <span class="nav-icon" data-icon="config"></span> Config
       </a>
     </nav>
 
@@ -76,7 +76,7 @@
         <div class="header">
           <h2>Dashboard</h2>
           <div class="header-actions">
-            <button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">&#128260; Refresh</button>
+            <button class="btn btn-sm btn-secondary" onclick="refreshAll(true)">Refresh</button>
             <div class="header-status">
               <span class="pulse" id="pulse-dot"></span>
               <span id="system-status">Operational</span>
@@ -109,7 +109,7 @@
 
         <div class="grid grid-2">
           <div class="command-panel card">
-            <h3>&#9997;&#65039; Quick Command</h3>
+            <h3>Quick Command</h3>
             <div class="command-input-wrap">
               <input type="text" id="command-input" placeholder="@sophia Research competitors for Oddsify Labs..." onkeydown="if(event.key==='Enter')sendCommand()">
               <button id="cmd-btn" class="btn btn-primary" onclick="sendCommand()">Send</button>
@@ -120,11 +120,11 @@
           </div>
 
           <div class="card">
-            <h3>&#128736;&#65039; Quick Actions</h3>
+            <h3>Quick Actions</h3>
             <div class="quick-actions">
-              <button class="btn btn-secondary" onclick="switchTab('request')">&#9997;&#65039; New Request</button>
-              <button class="btn btn-secondary" onclick="clearAllQueues()">&#128465;&#65039; Clear All Queues</button>
-              <button class="btn btn-secondary" onclick="switchTab('system')">&#128202; View System</button>
+              <button class="btn btn-secondary" onclick="switchTab('request')">New Request</button>
+              <button class="btn btn-secondary" onclick="clearAllQueues()">Clear All Queues</button>
+              <button class="btn btn-secondary" onclick="switchTab('system')">View System</button>
             </div>
           </div>
         </div>
@@ -168,20 +168,20 @@
             <div class="form-group">
               <label>Assign To</label>
               <select id="req-worker">
-                <option value="auto">&#129302; Auto (Sophia decides)</option>
-                <option value="iris">&#128221; Iris — Admin & Research</option>
-                <option value="pheme">&#128227; Pheme — Social Media</option>
-                <option value="kairos">&#127919; Kairos — Sales & Marketing</option>
-                <option value="sophia">&#128081; Sophia — Manager</option>
+                <option value="auto">Auto (Sophia decides)</option>
+                <option value="iris">Iris — Admin & Research</option>
+                <option value="pheme">Pheme — Social Media</option>
+                <option value="kairos">Kairos — Sales & Marketing</option>
+                <option value="sophia">Sophia — Manager</option>
               </select>
             </div>
             <div class="form-group">
               <label>Priority</label>
               <select id="req-priority">
-                <option value="low">&#128309; Low</option>
-                <option value="normal" selected>&#128993; Normal</option>
-                <option value="high">&#128992; High</option>
-                <option value="urgent">&#128308; Urgent</option>
+                <option value="low">Low</option>
+                <option value="normal" selected>Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
               </select>
             </div>
           </div>
@@ -358,7 +358,7 @@
   <footer class="app-footer">
     <div class="footer-inner">
       <div class="footer-brand">
-        <span class="footer-logo">&#9889;</span>
+        <span class="footer-logo" id="footer-logo"></span>
         <strong>HWMH</strong> — Hermes Workers Management Hub
       </div>
       <div class="footer-meta">
@@ -373,6 +373,7 @@
     </div>
   </footer>
 
+  <script src="/js/icons.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 </html>
