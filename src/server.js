@@ -614,6 +614,7 @@ app.get('/api/errors', (req, res) => {
 // Structured task requests storage
 if (!global.taskRequests) global.taskRequests = [];
 if (!global.sophiaConversation) global.sophiaConversation = [];
+if (!global.workerConversations) global.workerConversations = {};
 
 // POST /api/requests — Create a structured task request
 app.post('/api/requests', async (req, res) => {
@@ -730,7 +731,7 @@ app.get('/api/workers/:workerId/profile', (req, res) => {
     .map(t => ({
       taskId: t.id,
       description: t.description,
-      result: t.result,
+      result: typeof t.result === 'object' && t.result !== null ? JSON.stringify(t.result, null, 2) : t.result,
       completedAt: t.timestamp,
       duration: t.startedAt ? Math.round((new Date(t.timestamp) - new Date(t.startedAt)) / 1000) : null
     }));
@@ -743,7 +744,9 @@ app.get('/api/workers/:workerId/profile', (req, res) => {
       status: t.status,
       description: t.description,
       timestamp: t.timestamp,
-      result: t.result ? String(t.result).slice(0, 200) : null,
+      result: typeof t.result === 'object' && t.result !== null
+        ? JSON.stringify(t.result, null, 2).slice(0, 500)
+        : (t.result ? String(t.result).slice(0, 500) : null),
       error: t.error ? String(t.error).slice(0, 200) : null
     }));
 
@@ -845,6 +848,77 @@ app.get('/api/sophia/conversation', (req, res) => {
     conversation = conversation.filter(m => new Date(m.timestamp) > new Date(after));
   }
   res.json({
+    conversation: conversation.slice(-parseInt(limit)),
+    directorName: secrets.getSecret('DIRECTOR_NAME') || 'Director'
+  });
+});
+
+// ============================================
+// WORKER CHAT — Two-way messaging per worker
+// ============================================
+
+// POST /api/workers/:workerId/message — Send message to a worker
+app.post('/api/workers/:workerId/message', async (req, res) => {
+  const { workerId } = req.params;
+  const { message, type = 'chat' } = req.body;
+
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+  if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
+
+  if (!global.workerConversations[workerId]) global.workerConversations[workerId] = [];
+
+  const msgId = uuidv4();
+  const directorName = secrets.getSecret('DIRECTOR_NAME') || 'Director';
+
+  const userMsg = {
+    id: msgId,
+    sender: 'director',
+    senderName: directorName,
+    text: message.trim(),
+    type,
+    timestamp: new Date().toISOString()
+  };
+
+  global.workerConversations[workerId].push(userMsg);
+
+  // Also push a task to the worker's queue so they see it on next poll
+  const chatTask = {
+    id: msgId,
+    workerId,
+    description: `[Chat] ${message.trim()}`,
+    status: 'queued',
+    type: 'chat',
+    priority: 'high',
+    source: 'director-chat',
+    timestamp: new Date().toISOString()
+  };
+  if (queues[workerId]) {
+    queues[workerId].push(chatTask);
+    workerStatus[workerId].queueLength = queues[workerId].length;
+  }
+
+  // Trim conversation history
+  if (global.workerConversations[workerId].length > 500) {
+    global.workerConversations[workerId] = global.workerConversations[workerId].slice(-500);
+  }
+
+  res.json({ success: true, message: userMsg });
+});
+
+// GET /api/workers/:workerId/conversation — Get chat history with a worker
+app.get('/api/workers/:workerId/conversation', (req, res) => {
+  const { workerId } = req.params;
+  const { limit = 100, after } = req.query;
+
+  if (!WORKERS[workerId]) return res.status(404).json({ error: 'Unknown worker' });
+
+  let conversation = global.workerConversations[workerId] || [];
+  if (after) {
+    conversation = conversation.filter(m => new Date(m.timestamp) > new Date(after));
+  }
+
+  res.json({
+    workerId,
     conversation: conversation.slice(-parseInt(limit)),
     directorName: secrets.getSecret('DIRECTOR_NAME') || 'Director'
   });

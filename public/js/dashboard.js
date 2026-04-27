@@ -18,6 +18,8 @@ const API = {
   profile:   (id) => `/api/workers/${id}/profile`,
   sophiaMsg: '/api/sophia/message',
   sophiaConv:'/api/sophia/conversation',
+  workerMsg: (id) => `/api/workers/${id}/message`,
+  workerConv:(id) => `/api/workers/${id}/conversation`,
   clear:     (id) => `/api/workers/${id}/clear`,
   reset:     (id) => `/api/workers/${id}/reset`,
 };
@@ -30,6 +32,9 @@ let chatPollInterval = null;
 let directorUnread = 0;
 let directorPollInterval = null;
 let workersData = null;
+let currentWorkerId = null;
+let workerChatPollInterval = null;
+let workerChatMessages = [];
 
 /* ---------- Tabs ---------- */
 function switchTab(tab) {
@@ -56,6 +61,10 @@ function switchTab(tab) {
   if (tab === 'tasks')   loadTasks();
   if (tab === 'system')  loadSystem();
   if (tab === 'config')  loadConfig();
+  if (tab !== 'profile-detail') {
+    currentWorkerId = null;
+    stopWorkerChatPolling();
+  }
 }
 
 /* ---------- Intelligence Sub-Tabs ---------- */
@@ -226,8 +235,11 @@ async function clearAllQueues() {
 async function openProfile(workerId) {
   try {
     const data = await get(API.profile(workerId));
+    currentWorkerId = workerId;
     renderProfileDetail(data);
     switchTab('profile-detail');
+    loadWorkerChat(workerId);
+    startWorkerChatPolling(workerId);
   } catch (err) {
     toast('Failed to load profile: ' + err.message, 'error');
   }
@@ -307,7 +319,7 @@ function renderProfileDetail(data) {
                 ${o.duration ? `<span class="badge badge-info">${o.duration}s</span>` : ''}
               </div>
               <div class="chat-text">${escapeHtml(o.description || '')}</div>
-              ${o.result ? `<div class="chat-result">${escapeHtml(String(o.result))}</div>` : ''}
+              ${o.result ? `<div class="chat-result"><pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-family:inherit">${escapeHtml(String(o.result))}</pre></div>` : ''}
             </div>
           </div>
         `).join('')}
@@ -325,7 +337,7 @@ function renderProfileDetail(data) {
             <div class="timeline-content">
               <div class="timeline-time">${timeAgo(t.timestamp)}</div>
               <div class="timeline-desc">${escapeHtml(t.description || '')}</div>
-              ${t.result ? `<div class="timeline-result">${escapeHtml(t.result)}</div>` : ''}
+              ${t.result ? `<div class="timeline-result"><pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-family:inherit">${escapeHtml(String(t.result))}</pre></div>` : ''}
               ${t.error ? `<div class="timeline-error">${escapeHtml(t.error)}</div>` : ''}
             </div>
           </div>
@@ -333,7 +345,121 @@ function renderProfileDetail(data) {
       </div>
     </div>
     ` : ''}
+
+    <!-- Two-way Chat Section -->
+    <div class="profile-section">
+      <h4>
+        <span style="display:inline-flex;align-items:center;gap:8px">
+          ${icon('chat', 18)}
+          Chat with ${data.name}
+        </span>
+        <span class="badge badge-success" style="font-size:11px;margin-left:8px">Live</span>
+      </h4>
+      <div class="director-chat-container" style="border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div id="worker-chat-messages" class="director-chat-messages" style="height:320px;overflow-y:auto;padding:16px;background:var(--bg-elevated)">
+          <div class="empty-state" style="padding:24px 0">
+            <div class="empty-state-icon">${icon('chat', 40)}</div>
+            <div class="empty-state-text">Start a conversation with ${data.name}.</div>
+            <div class="empty-state-sub">Messages appear here in real-time. The worker will see your message as a chat task.</div>
+          </div>
+        </div>
+        <div class="director-chat-input-bar" style="padding:12px 16px;background:var(--bg-card);border-top:1px solid var(--border)">
+          <input
+            type="text"
+            id="worker-chat-input"
+            class="director-chat-input"
+            placeholder="Type a message to ${data.name}..."
+            onkeydown="if(event.key==='Enter')sendWorkerMessage()"
+            style="flex:1"
+          />
+          <button class="btn btn-primary" onclick="sendWorkerMessage()" style="display:flex;align-items:center;gap:6px">
+            ${icon('send', 14)} Send
+          </button>
+        </div>
+      </div>
+    </div>
   `;
+}
+
+/* ---------- Worker Chat ---------- */
+async function sendWorkerMessage() {
+  const input = document.getElementById('worker-chat-input');
+  if (!input || !input.value.trim() || !currentWorkerId) return;
+
+  const text = input.value.trim();
+  input.value = '';
+
+  // Optimistically add to UI
+  workerChatMessages.push({
+    sender: 'director',
+    text,
+    timestamp: new Date().toISOString()
+  });
+  renderWorkerChat();
+
+  try {
+    await post(API.workerMsg(currentWorkerId), { message: text, type: 'chat' });
+  } catch (err) {
+    toast('Failed to send: ' + err.message, 'error');
+  }
+}
+
+async function loadWorkerChat(workerId) {
+  if (!workerId) return;
+  try {
+    const data = await get(API.workerConv(workerId) + '?limit=100');
+    workerChatMessages = data.conversation || [];
+    renderWorkerChat();
+  } catch (err) {
+    console.error('Worker chat load failed:', err);
+  }
+}
+
+function renderWorkerChat() {
+  const container = document.getElementById('worker-chat-messages');
+  if (!container) return;
+
+  if (!workerChatMessages.length) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding:24px 0">
+        <div class="empty-state-icon">${icon('chat', 40)}</div>
+        <div class="empty-state-text">No messages yet.</div>
+        <div class="empty-state-sub">Send a message to start the conversation.</div>
+      </div>`;
+    return;
+  }
+
+  const meta = WORKER_META[currentWorkerId] || { icon: 'sophia', color: '#94a3b8', name: currentWorkerId };
+
+  container.innerHTML = workerChatMessages.map(m => {
+    const isDirector = m.sender === 'director';
+    return `
+      <div class="director-msg ${isDirector ? 'director-msg-user' : 'director-msg-sophia'}">
+        <div class="director-msg-header">
+          <div class="director-msg-avatar" style="background:${isDirector ? '#6366f1' : meta.color};color:#fff;width:28px;height:28px;font-size:12px">
+            ${isDirector ? 'You' : icon(meta.icon, 14)}
+          </div>
+          <strong>${isDirector ? (m.senderName || 'You') : (m.senderName || meta.name)}</strong>
+          <span class="director-msg-time">${timeAgo(m.timestamp)}</span>
+        </div>
+        <div class="director-msg-text">${escapeHtml(m.text || '')}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.scrollTop = container.scrollHeight;
+}
+
+function startWorkerChatPolling(workerId) {
+  stopWorkerChatPolling();
+  workerChatPollInterval = setInterval(() => loadWorkerChat(workerId), 5000);
+}
+
+function stopWorkerChatPolling() {
+  if (workerChatPollInterval) {
+    clearInterval(workerChatPollInterval);
+    workerChatPollInterval = null;
+  }
 }
 
 /* ---------- Tasks ---------- */
