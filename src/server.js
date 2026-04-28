@@ -528,7 +528,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     service: 'hwmh',
-    version: '1.0.2',
+    version: '1.0.7',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     memory: {
@@ -551,7 +551,7 @@ setInterval(() => {
 // System information
 app.get('/api/system', (req, res) => {
   res.json({
-    version: '1.0.0',
+    version: '1.0.7',
     nodeVersion: process.version,
     platform: process.platform,
     uptime: process.uptime(),
@@ -968,17 +968,33 @@ const PORT = secrets.getSecret('PORT') || 3000;
 const HOST = secrets.getSecret('HOST') || '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
+  // Check persistence
+  let persistenceStatus = 'MEMORY ONLY (will reset on deploy)';
+  try {
+    ensureDir(DATA_DIR);
+    const testFile = path.join(DATA_DIR, '.persist-check');
+    fs.writeFileSync(testFile, 'ok');
+    fs.unlinkSync(testFile);
+    const loaded = loadState();
+    const historyCount = loaded?.taskHistory?.length || 0;
+    const convCount = loaded?.sophiaConversation?.length || 0;
+    persistenceStatus = `PERSISTENT VOLUME — loaded ${historyCount} history entries, ${convCount} chat messages`;
+  } catch (err) {
+    persistenceStatus = `PERSISTENCE ERROR: ${err.message}`;
+  }
+
   console.log(`
-╔═══════════════════════════════════════════════════════╗
+╔═════════════════════════════════════════════════════════╗
 ║  HWMH - Hermes Workers Management Hub          ║
-║  Version 1.0.0 | MIT License                   ║
+║  Version 1.0.7 | MIT License                   ║
 ║                                               ║
 ║  Manager:  Sophia Hermes                      ║
 ║  Brain:    Gottfried (Leibniz Logic Engine)   ║
 ║  Workers:  Iris · Pheme · Kairos              ║
 ║                                               ║
+║  ${persistenceStatus.padEnd(45)}║
 ║  Listening on port ${PORT}                          ║
-╚═══════════════════════════════════════════════════════╝
+╚═════════════════════════════════════════════════════════╝
   `);
 
   // Audit secrets at startup (masked)
